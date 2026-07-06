@@ -57,13 +57,14 @@ O objetivo não é automatizar decisões críticas sem controle, mas reunir evid
 
 | Tecnologia | Papel no projeto | Estado |
 |---|---|---|
-| .NET 8 | Runtime da solução | Em uso |
-| ASP.NET Core | API HTTP e health check | Em uso |
-| PostgreSQL 16 | Persistência operacional | Infraestrutura preparada |
-| Redis 7 | Cache e apoio ao processamento | Infraestrutura preparada |
-| Docker Compose | Serviços locais reproduzíveis | Em uso |
-| Worker Service | Processamento em background | Estrutura preparada |
-| Telegram Bot API | Canal inicial de ChatOps | Planejado para o MVP |
+| [![.NET][dotnet-badge]][dotnet-url] | Runtime da solução | Em uso |
+| [![ASP.NET Core][aspnet-badge]][aspnet-url] | API HTTP e health check | Em uso |
+| [![PostgreSQL][postgres-badge]][postgres-url] | Persistência operacional | Infraestrutura preparada |
+| [![Redis][redis-badge]][redis-url] | Cache e apoio ao processamento | Infraestrutura preparada |
+| [![Docker][docker-badge]][docker-url] | Serviços locais reproduzíveis | Em uso |
+| [![Worker Service][worker-badge]][dotnet-url] | Processamento em background | Estrutura preparada |
+| [![Telegram][telegram-badge]][telegram-url] | Canal inicial de ChatOps | Planejado para o MVP |
+| [![xUnit][xunit-badge]][xunit-url] | Testes automatizados | Em uso |
 
 ## Arquitetura inicial
 
@@ -184,3 +185,19 @@ Content-Type: application/json
 - LinkedIn: [Jefferson Tadeu dos Santos](https://www.linkedin.com/in/jefferson-tadeu-dos-santos-0ab133380)
 
 <p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>
+
+[dotnet-badge]: https://img.shields.io/badge/.NET-8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white
+[dotnet-url]: https://dotnet.microsoft.com/
+[aspnet-badge]: https://img.shields.io/badge/ASP.NET_Core-API-512BD4?style=for-the-badge&logo=dotnet&logoColor=white
+[aspnet-url]: https://learn.microsoft.com/aspnet/core/
+[postgres-badge]: https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white
+[postgres-url]: https://www.postgresql.org/
+[redis-badge]: https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white
+[redis-url]: https://redis.io/
+[docker-badge]: https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white
+[docker-url]: https://www.docker.com/
+[worker-badge]: https://img.shields.io/badge/Worker_Service-background-0B1929?style=for-the-badge&logo=dotnet&logoColor=white
+[telegram-badge]: https://img.shields.io/badge/Telegram_Bot_API-planned-26A5E4?style=for-the-badge&logo=telegram&logoColor=white
+[telegram-url]: https://core.telegram.org/bots/api
+[xunit-badge]: https://img.shields.io/badge/xUnit-tests-512BD4?style=for-the-badge
+[xunit-url]: https://xunit.net/
