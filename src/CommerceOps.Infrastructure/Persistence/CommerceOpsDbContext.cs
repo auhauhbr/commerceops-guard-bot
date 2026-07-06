@@ -7,6 +7,8 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
 {
     public DbSet<ClientApplication> ClientApplications => Set<ClientApplication>();
     public DbSet<OperationalEvent> OperationalEvents => Set<OperationalEvent>();
+    public DbSet<OperationalCase> OperationalCases => Set<OperationalCase>();
+    public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +51,64 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
             entity.HasIndex(operationalEvent => operationalEvent.ClientApplicationId);
             entity.HasIndex(operationalEvent => operationalEvent.EventType);
             entity.HasIndex(operationalEvent => operationalEvent.ReceivedAt);
+        });
+
+        modelBuilder.Entity<OperationalCase>(entity =>
+        {
+            entity.ToTable("operational_cases");
+
+            entity.HasKey(operationalCase => operationalCase.Id);
+            entity.Property(operationalCase => operationalCase.Id).ValueGeneratedNever();
+            entity.Property(operationalCase => operationalCase.CaseNumber).HasMaxLength(32).IsRequired();
+            entity.Property(operationalCase => operationalCase.ProblemType).HasMaxLength(120).IsRequired();
+            entity.Property(operationalCase => operationalCase.Title).HasMaxLength(200).IsRequired();
+            entity.Property(operationalCase => operationalCase.Summary).HasMaxLength(1000).IsRequired();
+            entity.Property(operationalCase => operationalCase.Status).HasMaxLength(32).IsRequired();
+            entity.Property(operationalCase => operationalCase.RiskLevel).HasMaxLength(32).IsRequired();
+            entity.Property(operationalCase => operationalCase.RiskScore).IsRequired();
+            entity.Property(operationalCase => operationalCase.EntityType).HasMaxLength(120).IsRequired();
+            entity.Property(operationalCase => operationalCase.EntityId).HasMaxLength(160).IsRequired();
+            entity.Property(operationalCase => operationalCase.CreatedAt).IsRequired();
+            entity.Property(operationalCase => operationalCase.UpdatedAt).IsRequired();
+
+            entity.HasOne(operationalCase => operationalCase.ClientApplication)
+                .WithMany(application => application.OperationalCases)
+                .HasForeignKey(operationalCase => operationalCase.ClientApplicationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(operationalCase => operationalCase.CaseNumber).IsUnique();
+            entity.HasIndex(operationalCase => operationalCase.ClientApplicationId);
+            entity.HasIndex(operationalCase => new
+            {
+                operationalCase.ClientApplicationId,
+                operationalCase.EntityType,
+                operationalCase.EntityId,
+                operationalCase.ProblemType,
+                operationalCase.Status
+            }).HasDatabaseName("IX_operational_cases_open_lookup");
+            entity.HasIndex(operationalCase => operationalCase.CreatedAt);
+        });
+
+        modelBuilder.Entity<CaseFinding>(entity =>
+        {
+            entity.ToTable("case_findings");
+
+            entity.HasKey(finding => finding.Id);
+            entity.Property(finding => finding.Id).ValueGeneratedNever();
+            entity.Property(finding => finding.Type).HasMaxLength(120).IsRequired();
+            entity.Property(finding => finding.Severity).HasMaxLength(32).IsRequired();
+            entity.Property(finding => finding.Title).HasMaxLength(200).IsRequired();
+            entity.Property(finding => finding.Description).HasMaxLength(1000).IsRequired();
+            entity.Property(finding => finding.EvidenceJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(finding => finding.CreatedAt).IsRequired();
+
+            entity.HasOne(finding => finding.Case)
+                .WithMany(operationalCase => operationalCase.Findings)
+                .HasForeignKey(finding => finding.CaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(finding => finding.CaseId);
+            entity.HasIndex(finding => finding.Type);
         });
     }
 }

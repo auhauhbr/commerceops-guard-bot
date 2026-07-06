@@ -1,3 +1,4 @@
+using CommerceOps.Application.Cases;
 using CommerceOps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +32,8 @@ public static class DependencyInjection
         services.AddDbContext<CommerceOpsDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("CommerceOps")));
 
+        services.AddScoped<CaseRuleEvaluator>();
+        services.AddScoped<ICaseService, CaseService>();
         services.AddScoped<ClientApplicationSeeder>();
 
         return services;

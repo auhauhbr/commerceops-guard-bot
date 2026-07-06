@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommerceOps.Application.Cases;
 using CommerceOps.Application.Security;
 using CommerceOps.Domain;
 using CommerceOps.Infrastructure;
@@ -21,6 +22,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapPost("/api/events", async (
     HttpRequest request,
     CommerceOpsDbContext dbContext,
+    ICaseService caseService,
     HmacSignatureService signatureService,
     IOptions<EventIngestionOptions> options,
     TimeProvider timeProvider,
@@ -108,7 +110,7 @@ app.MapPost("/api/events", async (
         return Results.BadRequest(new ErrorResponse("app_id nao corresponde ao header X-CommerceOps-App."));
     }
 
-    dbContext.OperationalEvents.Add(new OperationalEvent
+    var operationalEvent = new OperationalEvent
     {
         Id = Guid.NewGuid(),
         ClientApplicationId = clientApplication.Id,
@@ -120,11 +122,79 @@ app.MapPost("/api/events", async (
         RawBody = rawBody,
         DataJson = eventRequest.Data.ValueKind is JsonValueKind.Undefined ? null : eventRequest.Data.GetRawText(),
         ReceivedAt = now
-    });
+    };
 
+    dbContext.OperationalEvents.Add(operationalEvent);
     await dbContext.SaveChangesAsync(cancellationToken);
+    await caseService.EvaluateOperationalEventAsync(operationalEvent, cancellationToken);
 
     return Results.Accepted($"/api/events", new EventAcceptedResponse("accepted"));
+});
+
+app.MapGet("/api/cases", async (CommerceOpsDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var cases = await dbContext.OperationalCases
+        .AsNoTracking()
+        .OrderByDescending(operationalCase => operationalCase.CaseNumber)
+        .Select(operationalCase => new
+        {
+            id = operationalCase.Id,
+            case_number = operationalCase.CaseNumber,
+            application_id = operationalCase.ClientApplicationId,
+            title = operationalCase.Title,
+            summary = operationalCase.Summary,
+            status = operationalCase.Status,
+            risk_level = operationalCase.RiskLevel,
+            risk_score = operationalCase.RiskScore,
+            entity_type = operationalCase.EntityType,
+            entity_id = operationalCase.EntityId,
+            created_at = operationalCase.CreatedAt,
+            updated_at = operationalCase.UpdatedAt,
+            closed_at = operationalCase.ClosedAt
+        })
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(cases);
+});
+
+app.MapGet("/api/cases/{id:guid}", async (Guid id, CommerceOpsDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var operationalCase = await dbContext.OperationalCases
+        .AsNoTracking()
+        .Where(currentCase => currentCase.Id == id)
+        .Select(currentCase => new
+        {
+            id = currentCase.Id,
+            case_number = currentCase.CaseNumber,
+            application_id = currentCase.ClientApplicationId,
+            title = currentCase.Title,
+            summary = currentCase.Summary,
+            status = currentCase.Status,
+            risk_level = currentCase.RiskLevel,
+            risk_score = currentCase.RiskScore,
+            entity_type = currentCase.EntityType,
+            entity_id = currentCase.EntityId,
+            created_at = currentCase.CreatedAt,
+            updated_at = currentCase.UpdatedAt,
+            closed_at = currentCase.ClosedAt,
+            findings = currentCase.Findings
+                .OrderBy(finding => finding.Id)
+                .Select(finding => new
+                {
+                    id = finding.Id,
+                    case_id = finding.CaseId,
+                    type = finding.Type,
+                    severity = finding.Severity,
+                    title = finding.Title,
+                    description = finding.Description,
+                    evidence_json = finding.EvidenceJson,
+                    created_at = finding.CreatedAt
+                })
+                .ToList()
+        })
+        .SingleOrDefaultAsync(cancellationToken);
+
+    return operationalCase is null ? Results.NotFound() : Results.Ok(operationalCase);
 });
 
 using (var scope = app.Services.CreateScope())
