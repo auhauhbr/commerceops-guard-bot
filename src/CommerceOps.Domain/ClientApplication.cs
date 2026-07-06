@@ -12,4 +12,5 @@ public sealed class ClientApplication
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public List<OperationalEvent> OperationalEvents { get; set; } = [];
+    public List<OperationalCase> OperationalCases { get; set; } = [];
 }
