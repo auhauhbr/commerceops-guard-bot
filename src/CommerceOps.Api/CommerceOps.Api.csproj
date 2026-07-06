@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CommerceOps.Application\CommerceOps.Application.csproj" />
+    <ProjectReference Include="..\CommerceOps.Infrastructure\CommerceOps.Infrastructure.csproj" />
+    <ProjectReference Include="..\CommerceOps.Contracts\CommerceOps.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

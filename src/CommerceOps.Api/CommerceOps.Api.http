@@ -1,0 +1,6 @@
+@CommerceOps.Api_HostAddress = http://localhost:5073
+
+GET {{CommerceOps.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
