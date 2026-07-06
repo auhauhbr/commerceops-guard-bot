@@ -1,8 +1,163 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CommerceOps.Application.Security;
+using CommerceOps.Domain;
+using CommerceOps.Infrastructure;
+using CommerceOps.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCommerceOpsInfrastructure(builder.Configuration);
+builder.Services.Configure<EventIngestionOptions>(builder.Configuration.GetSection(EventIngestionOptions.SectionName));
+builder.Services.AddSingleton<HmacSignatureService>();
+builder.Services.AddSingleton(TimeProvider.System);
+
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
+app.MapPost("/api/events", async (
+    HttpRequest request,
+    CommerceOpsDbContext dbContext,
+    HmacSignatureService signatureService,
+    IOptions<EventIngestionOptions> options,
+    TimeProvider timeProvider,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken) =>
+{
+    var logger = loggerFactory.CreateLogger("CommerceOps.Api.Events");
+
+    if (!request.Headers.TryGetValue("X-CommerceOps-App", out var appHeader) ||
+        string.IsNullOrWhiteSpace(appHeader))
+    {
+        return Results.BadRequest(new ErrorResponse("Header X-CommerceOps-App obrigatorio."));
+    }
+
+    if (!request.Headers.TryGetValue("X-CommerceOps-Timestamp", out var timestampHeader) ||
+        string.IsNullOrWhiteSpace(timestampHeader))
+    {
+        return Results.BadRequest(new ErrorResponse("Header X-CommerceOps-Timestamp obrigatorio."));
+    }
+
+    if (!request.Headers.TryGetValue("X-CommerceOps-Signature", out var signatureHeader) ||
+        string.IsNullOrWhiteSpace(signatureHeader))
+    {
+        return Results.Unauthorized();
+    }
+
+    var timestampValue = timestampHeader.ToString();
+    if (!DateTimeOffset.TryParse(timestampValue, out var signedAt))
+    {
+        return Results.BadRequest(new ErrorResponse("Timestamp invalido."));
+    }
+
+    var now = timeProvider.GetUtcNow();
+    var tolerance = TimeSpan.FromMinutes(options.Value.ReplayWindowMinutes);
+    if (signedAt < now.Subtract(tolerance) || signedAt > now.Add(tolerance))
+    {
+        logger.LogWarning("Rejected event for app {AppPublicId}: timestamp outside replay window.", appHeader.ToString());
+        return Results.Unauthorized();
+    }
+
+    var publicId = appHeader.ToString();
+    var clientApplication = await dbContext.ClientApplications
+        .SingleOrDefaultAsync(application => application.PublicId == publicId, cancellationToken);
+
+    if (clientApplication is null || !clientApplication.IsActive)
+    {
+        logger.LogWarning("Rejected event for unknown or inactive app {AppPublicId}.", publicId);
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    using var reader = new StreamReader(request.Body);
+    var rawBody = await reader.ReadToEndAsync(cancellationToken);
+
+    if (!signatureService.IsValidSignature(
+            clientApplication.Secret,
+            timestampValue,
+            rawBody,
+            signatureHeader.ToString()))
+    {
+        logger.LogWarning("Rejected event for app {AppPublicId}: invalid signature.", publicId);
+        return Results.Unauthorized();
+    }
+
+    EventRequest? eventRequest;
+    try
+    {
+        eventRequest = JsonSerializer.Deserialize<EventRequest>(rawBody, JsonOptions.Default);
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest(new ErrorResponse("Payload JSON invalido."));
+    }
+
+    if (eventRequest is null ||
+        string.IsNullOrWhiteSpace(eventRequest.EventType) ||
+        string.IsNullOrWhiteSpace(eventRequest.EntityType) ||
+        string.IsNullOrWhiteSpace(eventRequest.EntityId) ||
+        string.IsNullOrWhiteSpace(eventRequest.Severity))
+    {
+        return Results.BadRequest(new ErrorResponse("Payload do evento incompleto."));
+    }
+
+    if (!string.Equals(eventRequest.AppId, publicId, StringComparison.Ordinal))
+    {
+        return Results.BadRequest(new ErrorResponse("app_id nao corresponde ao header X-CommerceOps-App."));
+    }
+
+    dbContext.OperationalEvents.Add(new OperationalEvent
+    {
+        Id = Guid.NewGuid(),
+        ClientApplicationId = clientApplication.Id,
+        EventType = eventRequest.EventType,
+        EntityType = eventRequest.EntityType,
+        EntityId = eventRequest.EntityId,
+        OccurredAt = eventRequest.OccurredAt,
+        Severity = eventRequest.Severity,
+        RawBody = rawBody,
+        DataJson = eventRequest.Data.ValueKind is JsonValueKind.Undefined ? null : eventRequest.Data.GetRawText(),
+        ReceivedAt = now
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Accepted($"/api/events", new EventAcceptedResponse("accepted"));
+});
+
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider.GetRequiredService<ClientApplicationSeeder>();
+    await seeder.SeedAsync();
+}
+
 app.Run();
 
 public partial class Program;
+
+public sealed class EventIngestionOptions
+{
+    public const string SectionName = "EventIngestion";
+
+    public int ReplayWindowMinutes { get; set; } = 5;
+}
+
+internal sealed record EventRequest(
+    [property: JsonPropertyName("app_id")] string AppId,
+    [property: JsonPropertyName("event_type")] string EventType,
+    [property: JsonPropertyName("entity_type")] string EntityType,
+    [property: JsonPropertyName("entity_id")] string EntityId,
+    [property: JsonPropertyName("occurred_at")] DateTimeOffset OccurredAt,
+    [property: JsonPropertyName("severity")] string Severity,
+    [property: JsonPropertyName("data")] JsonElement Data);
+
+internal sealed record ErrorResponse(string Error);
+
+internal sealed record EventAcceptedResponse(string Status);
+
+internal static class JsonOptions
+{
+    public static readonly JsonSerializerOptions Default = new(JsonSerializerDefaults.Web);
+}
