@@ -34,6 +34,7 @@ public static class DependencyInjection
 
         services.AddScoped<CaseRuleEvaluator>();
         services.AddScoped<ICaseService, CaseService>();
+        services.AddScoped<IOperationalCaseQueryService, OperationalCaseQueryService>();
         services.AddScoped<ClientApplicationSeeder>();
 
         return services;
