@@ -48,6 +48,36 @@ app.MapGet("/api/integrations/lumora/health", async (
     });
 });
 
+app.MapGet("/api/integrations/lumora/orders/{id}/diagnostic", async (
+    string id,
+    ILumoraClient lumoraClient,
+    CancellationToken cancellationToken) =>
+{
+    var result = await lumoraClient.GetOrderDiagnosticAsync(id, cancellationToken);
+
+    if (result.IsSuccess && result.Data is not null)
+    {
+        return Results.Ok(result.Data);
+    }
+
+    if (result.Error?.Code == "not_found" || result.Error?.StatusCode == StatusCodes.Status404NotFound)
+    {
+        return Results.NotFound(new
+        {
+            status = "not_found",
+            message = "Pedido nao encontrado na Lumora."
+        });
+    }
+
+    return Results.Ok(new
+    {
+        integration = "lumora",
+        status = "unavailable",
+        error_code = result.Error?.Code ?? "unknown_error",
+        message = GetSafeLumoraDiagnosticMessage(result.Error?.Code)
+    });
+});
+
 static string GetSafeLumoraHealthMessage(string? errorCode) =>
     errorCode switch
     {
@@ -57,6 +87,18 @@ static string GetSafeLumoraHealthMessage(string? errorCode) =>
         "invalid_response" => "A Lumora retornou uma resposta invalida.",
         "http_error" => "A Lumora retornou uma resposta de erro.",
         _ => "Nao foi possivel consultar a Lumora."
+    };
+
+static string GetSafeLumoraDiagnosticMessage(string? errorCode) =>
+    errorCode switch
+    {
+        "not_configured" => "Integracao Lumora nao configurada.",
+        "timeout" => "Tempo esgotado ao consultar a Lumora.",
+        "unavailable" => "Nao foi possivel conectar com a Lumora.",
+        "invalid_response" => "A Lumora retornou uma resposta invalida.",
+        "http_error" => "A Lumora retornou uma resposta de erro.",
+        "invalid_order_id" => "Identificador do pedido invalido.",
+        _ => "Nao foi possivel consultar o diagnostico do pedido na Lumora."
     };
 
 app.MapPost("/api/events", async (

@@ -18,7 +18,26 @@ public sealed record LumoraOrderDiagnosticResponse(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("payment_status")] string? PaymentStatus,
     [property: JsonPropertyName("stock_status")] string? StockStatus,
-    [property: JsonPropertyName("findings")] IReadOnlyList<LumoraDiagnosticFinding> Findings);
+    [property: JsonPropertyName("findings")] IReadOnlyList<LumoraDiagnosticFinding> Findings,
+    [property: JsonPropertyName("summary")] string? Summary,
+    [property: JsonPropertyName("risk")] string? Risk,
+    [property: JsonPropertyName("order_number")] string? OrderNumber,
+    [property: JsonPropertyName("total")] string? Total,
+    [property: JsonPropertyName("subtotal")] string? Subtotal,
+    [property: JsonPropertyName("shipping_value")] string? ShippingValue,
+    [property: JsonPropertyName("created_at")] DateTimeOffset? CreatedAt,
+    [property: JsonPropertyName("updated_at")] DateTimeOffset? UpdatedAt,
+    [property: JsonPropertyName("items")] IReadOnlyList<LumoraOrderDiagnosticItem>? Items);
+
+public sealed record LumoraOrderDiagnosticItem(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("product_id")] string? ProductId,
+    [property: JsonPropertyName("product_name")] string? ProductName,
+    [property: JsonPropertyName("unit_price")] string? UnitPrice,
+    [property: JsonPropertyName("quantity")] int? Quantity,
+    [property: JsonPropertyName("total")] string? Total,
+    [property: JsonPropertyName("product_exists")] bool? ProductExists,
+    [property: JsonPropertyName("current_stock")] int? CurrentStock);
 
 public sealed record LumoraDiagnosticFinding(
     [property: JsonPropertyName("type")] string Type,

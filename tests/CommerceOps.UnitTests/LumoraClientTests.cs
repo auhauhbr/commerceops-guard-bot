@@ -76,6 +76,22 @@ public sealed class LumoraClientTests
     }
 
     [Fact]
+    public async Task NotFoundStatusReturnsNotFoundError()
+    {
+        var logger = new CapturingLogger<LumoraClient>();
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var client = CreateClient(handler, logger);
+
+        var result = await client.GetOrderDiagnosticAsync("missing-order");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("not_found", result.Error?.Code);
+        Assert.Equal(404, result.Error?.StatusCode);
+        Assert.DoesNotContain("super-secret", logger.Messages);
+        Assert.DoesNotContain("sha256=", logger.Messages);
+    }
+
+    [Fact]
     public async Task InvalidJsonReturnsFriendlyError()
     {
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
