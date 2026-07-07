@@ -1,4 +1,5 @@
 using CommerceOps.Application.Cases;
+using CommerceOps.Application.Actions;
 using CommerceOps.Application.Lumora;
 using CommerceOps.Infrastructure.Lumora;
 using CommerceOps.Infrastructure.Persistence;
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<CaseRuleEvaluator>();
         services.AddScoped<ICaseService, CaseService>();
         services.AddScoped<IOperationalCaseQueryService, OperationalCaseQueryService>();
+        services.AddScoped<IActionRequestService, ActionRequestService>();
         services.AddScoped<ClientApplicationSeeder>();
 
         return services;

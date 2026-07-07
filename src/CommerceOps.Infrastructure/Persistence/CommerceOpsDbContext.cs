@@ -9,6 +9,7 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
     public DbSet<OperationalEvent> OperationalEvents => Set<OperationalEvent>();
     public DbSet<OperationalCase> OperationalCases => Set<OperationalCase>();
     public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
+    public DbSet<ActionRequest> ActionRequests => Set<ActionRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -109,6 +110,35 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
 
             entity.HasIndex(finding => finding.CaseId);
             entity.HasIndex(finding => finding.Type);
+        });
+
+        modelBuilder.Entity<ActionRequest>(entity =>
+        {
+            entity.ToTable("action_requests");
+
+            entity.HasKey(actionRequest => actionRequest.Id);
+            entity.Property(actionRequest => actionRequest.Id).ValueGeneratedNever();
+            entity.Property(actionRequest => actionRequest.PublicId).HasMaxLength(32).IsRequired();
+            entity.Property(actionRequest => actionRequest.Type).HasMaxLength(120).IsRequired();
+            entity.Property(actionRequest => actionRequest.Status).HasMaxLength(32).IsRequired();
+            entity.Property(actionRequest => actionRequest.EntityType).HasMaxLength(120).IsRequired();
+            entity.Property(actionRequest => actionRequest.EntityId).HasMaxLength(160).IsRequired();
+            entity.Property(actionRequest => actionRequest.Risk).HasMaxLength(32);
+            entity.Property(actionRequest => actionRequest.Reason).HasMaxLength(200).IsRequired();
+            entity.Property(actionRequest => actionRequest.PayloadJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(actionRequest => actionRequest.CreatedByChatId).IsRequired();
+            entity.Property(actionRequest => actionRequest.CreatedAt).IsRequired();
+            entity.Property(actionRequest => actionRequest.FailureReason).HasMaxLength(1000);
+
+            entity.HasIndex(actionRequest => actionRequest.PublicId).IsUnique();
+            entity.HasIndex(actionRequest => actionRequest.Status);
+            entity.HasIndex(actionRequest => actionRequest.CreatedAt);
+            entity.HasIndex(actionRequest => new
+            {
+                actionRequest.EntityType,
+                actionRequest.EntityId,
+                actionRequest.Status
+            }).HasDatabaseName("IX_action_requests_entity_status");
         });
     }
 }
