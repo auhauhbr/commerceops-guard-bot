@@ -112,18 +112,57 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/pedido 1"), CancellationToken.None);
 
-        Assert.Contains("Pedido #1 — Diagnóstico Lumora", response);
+        Assert.Contains("Pedido #1", response);
         Assert.Contains("Status do pedido: pending_payment", response);
         Assert.Contains("Pagamento: pending", response);
         Assert.Contains("Estoque: ok", response);
         Assert.Contains("Risco: low", response);
-        Assert.Contains("1. pending_order_without_approved_payment", response);
-        Assert.Contains("Order is pending and does not have an approved payment.", response);
-        Assert.Contains("- Ponto De Acesso Ubiquiti UniFi U6+ Wi-Fi 6 Interno", response);
-        Assert.Contains("qtd: 1", response);
-        Assert.Contains("total: R$ 899.00", response);
-        Assert.Contains("estoque atual: 8", response);
-        Assert.Contains("Use /mensagem-pedido 1 para gerar um rascunho de mensagem ao cliente.", response);
+        Assert.Contains("Achados: 1", response);
+        Assert.Contains("Total: R$ 899.00", response);
+        Assert.Contains("Itens: 1", response);
+        Assert.Contains("Nenhuma ação foi executada.", response);
+        Assert.DoesNotContain("Order is pending and does not have an approved payment.", response);
+    }
+
+    [Fact]
+    public async Task RouteMessageAsyncAddsInlineButtonsForOrderDiagnostic()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic())));
+
+        var response = await router.RouteMessageAsync(new TelegramCommandContext(1, 123, "/p 1"), CancellationToken.None);
+
+        Assert.Contains("Pedido #1", response.Text);
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Ver achados" && button.CallbackData == "order:findings:1");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Ver itens" && button.CallbackData == "order:items:1");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Gerar mensagem" && button.CallbackData == "order:draft:1");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Preparar ação" && button.CallbackData == "order:prepare:1");
+    }
+
+    [Fact]
+    public async Task RouteCallbackAsyncShowsFullOrderFindings()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic())));
+
+        var response = await router.RouteCallbackAsync("order:findings:1", 1, 123, CancellationToken.None);
+
+        Assert.Contains("Achados — Pedido #1", response.Text);
+        Assert.Contains("pending_order_without_approved_payment", response.Text);
+        Assert.Contains("Order is pending and does not have an approved payment.", response.Text);
+    }
+
+    [Fact]
+    public async Task RouteCallbackAsyncShowsOrderItems()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic())));
+
+        var response = await router.RouteCallbackAsync("order:items:1", 1, 123, CancellationToken.None);
+
+        Assert.Contains("Itens — Pedido #1", response.Text);
+        Assert.Contains("Ponto De Acesso Ubiquiti UniFi U6+ Wi-Fi 6 Interno", response.Text);
+        Assert.Contains("estoque atual: 8", response.Text);
     }
 
     [Fact]
@@ -170,12 +209,25 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/msg-pedido 1"), CancellationToken.None);
 
-        Assert.Contains("Rascunho de mensagem para cliente — Pedido #1", response);
+        Assert.Contains("Rascunho — Pedido #1", response);
         Assert.Contains("Canal sugerido: email", response);
         Assert.Contains("Assunto: Atualização sobre seu pedido #1", response);
         Assert.Contains("Mensagem:", response);
         Assert.Contains("Status:", response);
         Assert.Contains("Rascunho gerado. Nenhuma mensagem foi enviada.", response);
+        Assert.Equal(1, lumoraClient.OrderDiagnosticCalls);
+    }
+
+    [Fact]
+    public async Task RouteAsyncSupportsShortMessageAliases()
+    {
+        var lumoraClient = new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic()));
+        var router = CreateRouter(lumoraClient: lumoraClient);
+
+        var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/msg 1"), CancellationToken.None);
+
+        Assert.Contains("Rascunho — Pedido #1", response);
         Assert.Equal(1, lumoraClient.OrderDiagnosticCalls);
     }
 
@@ -203,7 +255,32 @@ public sealed class TelegramCommandRouterTests
 
         Assert.Contains("Assunto: Estamos revisando seu pedido #1", response);
         Assert.Contains("pagamento do seu pedido #1 foi aprovado", response);
-        Assert.Contains("Você não precisa refazer o pedido", response);
+        Assert.DoesNotContain("Você não precisa refazer o pedido", response);
+    }
+
+    [Fact]
+    public async Task RouteMessageAsyncAddsFullMessageButtonForLongDraft()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic(
+                findingType: "order_paid_but_pending"))));
+
+        var response = await router.RouteMessageAsync(new TelegramCommandContext(1, 123, "/mensagem 1"), CancellationToken.None);
+
+        Assert.Contains("Rascunho — Pedido #1", response.Text);
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Ver mensagem completa" && button.CallbackData == "draft:full:1");
+    }
+
+    [Fact]
+    public async Task RouteCallbackAsyncShowsFullDraft()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic(
+                findingType: "order_paid_but_pending"))));
+
+        var response = await router.RouteCallbackAsync("draft:full:1", 1, 123, CancellationToken.None);
+
+        Assert.Contains("Você não precisa refazer o pedido", response.Text);
     }
 
     [Fact]
@@ -213,8 +290,8 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/help"), CancellationToken.None);
 
-        Assert.Contains("/pedido {id} - consulta diagnóstico operacional de um pedido da Lumora", response);
-        Assert.Contains("/mensagem-pedido {id} - gera rascunho de mensagem para o cliente, sem enviar", response);
+        Assert.Contains("/pedido {id} - consulta pedido e abre botões", response);
+        Assert.Contains("/msg {id} - gera rascunho sem enviar", response);
     }
 
     [Fact]
@@ -237,16 +314,42 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteAsync(new TelegramCommandContext(77, 123, "/preparar-mensagem-pedido 1"), CancellationToken.None);
 
-        Assert.Contains("Ação pendente criada: ACT-00001", response);
+        Assert.Contains("Ação pendente: ACT-00001", response);
         Assert.Contains("Tipo: customer_message_email", response);
         Assert.Contains("Pedido: #1", response);
-        Assert.Contains("Risco: low", response);
         Assert.Contains("Status: pending_approval", response);
-        Assert.Contains("Assunto:", response);
-        Assert.Contains("Atualização sobre seu pedido #1", response);
         Assert.Contains("Nenhuma mensagem foi enviada.", response);
-        Assert.Contains("/confirmar-acao ACT-00001", response);
-        Assert.Contains("/cancelar-acao ACT-00001", response);
+        Assert.Single(actionService.CreatedRequests);
+        Assert.Equal(77, actionService.CreatedRequests[0].CreatedByChatId);
+    }
+
+    [Fact]
+    public async Task RouteMessageAsyncAddsActionButtonsForPreparedMessage()
+    {
+        var actionService = new FakeActionRequestService();
+        var router = CreateRouter(
+            lumoraClient: new FakeLumoraClient(LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic())),
+            actionRequestService: actionService);
+
+        var response = await router.RouteMessageAsync(new TelegramCommandContext(77, 123, "/prep 1"), CancellationToken.None);
+
+        Assert.Contains("Ação pendente: ACT-00001", response.Text);
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Confirmar" && button.CallbackData == "action:approve:ACT-00001");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Cancelar" && button.CallbackData == "action:cancel:ACT-00001");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Ver rascunho" && button.CallbackData == "action:draft:ACT-00001");
+    }
+
+    [Fact]
+    public async Task RouteCallbackAsyncPreparesPendingActionFromOrderButton()
+    {
+        var actionService = new FakeActionRequestService();
+        var router = CreateRouter(
+            lumoraClient: new FakeLumoraClient(LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic())),
+            actionRequestService: actionService);
+
+        var response = await router.RouteCallbackAsync("order:prepare:1", 77, 123, CancellationToken.None);
+
+        Assert.Contains("Ação pendente: ACT-00001", response.Text);
         Assert.Single(actionService.CreatedRequests);
         Assert.Equal(77, actionService.CreatedRequests[0].CreatedByChatId);
     }
@@ -294,11 +397,26 @@ public sealed class TelegramCommandRouterTests
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/acoes"), CancellationToken.None);
 
         Assert.Contains("Ações pendentes:", response);
-        Assert.Contains("ACT-00001", response);
-        Assert.Contains("Tipo: customer_message_email", response);
-        Assert.Contains("Pedido: #1", response);
+        Assert.Contains("ACT-00001 — Pedido #1 — mensagem ao cliente", response);
         Assert.Contains("Status: pending_approval", response);
-        Assert.Contains("Criada em:", response);
+    }
+
+    [Fact]
+    public async Task RouteMessageAsyncAddsButtonsForPendingActions()
+    {
+        var actionService = new FakeActionRequestService
+        {
+            PendingActions =
+            [
+                CreateActionDetails("ACT-00001", status: ActionRequestStatuses.PendingApproval, entityId: "1")
+            ]
+        };
+        var router = CreateRouter(actionRequestService: actionService);
+
+        var response = await router.RouteMessageAsync(new TelegramCommandContext(1, 123, "/acoes"), CancellationToken.None);
+
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Confirmar" && button.CallbackData == "action:approve:ACT-00001");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Cancelar" && button.CallbackData == "action:cancel:ACT-00001");
     }
 
     [Fact]
@@ -343,10 +461,10 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/help"), CancellationToken.None);
 
-        Assert.Contains("/preparar-mensagem-pedido {id} - cria ação pendente com rascunho de mensagem ao cliente", response);
+        Assert.Contains("/prep {id} - prepara ação pendente", response);
         Assert.Contains("/acoes - lista ações pendentes", response);
-        Assert.Contains("/confirmar-acao {id} - aprova uma ação pendente", response);
-        Assert.Contains("/cancelar-acao {id} - cancela uma ação pendente", response);
+        Assert.Contains("/confirmar {id} - aprova ação pendente", response);
+        Assert.Contains("/cancelar {id} - cancela ação pendente", response);
     }
 
     private static TelegramCommandRouter CreateRouter(
@@ -513,6 +631,8 @@ public sealed class TelegramCommandRouterTests
 
         public IReadOnlyList<ActionRequestDetails> PendingActions { get; init; } = [];
 
+        public ActionRequestDetails? GetByPublicIdResult { get; init; }
+
         public ActionRequestDetails? ApproveResult { get; init; }
 
         public ActionRequestDetails? CancelResult { get; init; }
@@ -540,6 +660,13 @@ public sealed class TelegramCommandRouterTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(PendingActions);
+        }
+
+        public Task<ActionRequestDetails?> GetByPublicIdAsync(
+            string publicId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(GetByPublicIdResult);
         }
 
         public Task<ActionRequestDetails?> ApproveAsync(

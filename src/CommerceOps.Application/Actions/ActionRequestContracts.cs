@@ -51,6 +51,10 @@ public interface IActionRequestService
         int limit,
         CancellationToken cancellationToken = default);
 
+    Task<ActionRequestDetails?> GetByPublicIdAsync(
+        string publicId,
+        CancellationToken cancellationToken = default);
+
     Task<ActionRequestDetails?> ApproveAsync(
         string publicId,
         long approvedByChatId,
