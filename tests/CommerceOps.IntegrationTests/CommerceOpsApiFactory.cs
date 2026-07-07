@@ -44,18 +44,21 @@ public sealed class CommerceOpsApiFactory : WebApplicationFactory<Program>
             var dbContext = scope.ServiceProvider.GetRequiredService<CommerceOpsDbContext>();
             dbContext.Database.EnsureCreated();
 
-            dbContext.ClientApplications.Add(new ClientApplication
+            if (!dbContext.ClientApplications.Any(application => application.PublicId == AppPublicId))
             {
-                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                Name = "Lumora",
-                PublicId = AppPublicId,
-                Secret = AppSecret,
-                BaseUrl = "http://localhost",
-                IsActive = true,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
+                dbContext.ClientApplications.Add(new ClientApplication
+                {
+                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    Name = "Lumora",
+                    PublicId = AppPublicId,
+                    Secret = AppSecret,
+                    BaseUrl = "http://localhost",
+                    IsActive = true,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
 
-            dbContext.SaveChanges();
+                dbContext.SaveChanges();
+            }
         });
     }
 
