@@ -441,37 +441,6 @@ Próximas fases:
 - [ ] ampliar tipos de ações operacionais;
 - [ ] evoluir Worker para processamento assíncrono de ações.
 
-## Texto Para LinkedIn
-
-```text
-Estou desenvolvendo o CommerceOps Guard, um projeto em .NET 8 para ChatOps defensivo em e-commerce.
-
-A ideia é criar uma camada operacional externa que ajuda a diagnosticar inconsistências entre pedidos, pagamentos, estoque, webhooks e filas, sem acessar diretamente o banco da loja e sem burlar as regras de negócio do sistema principal.
-
-O projeto já conta com:
-
-- API em ASP.NET Core Minimal APIs;
-- Entity Framework Core com PostgreSQL;
-- ingestão de eventos com assinatura HMAC;
-- criação de casos operacionais com evidências;
-- integração segura com a Lumora, um e-commerce Laravel + React;
-- endpoint interno para diagnóstico de pedidos;
-- bot Telegram para admins;
-- comandos como /pedido, /mensagem-pedido, /preparar-mensagem-pedido, /acoes, /confirmar-acao e /cancelar-acao;
-- geração de rascunhos de mensagem ao cliente;
-- fluxo de ActionRequest para aprovar ou cancelar ações antes de qualquer execução;
-- testes unitários e de integração com xUnit.
-
-Um exemplo prático: o bot consegue consultar um pedido na Lumora, mostrar status do pedido, pagamento, estoque, risco, achados operacionais e itens. A partir disso, ele gera um rascunho de mensagem para o cliente e cria uma ação pendente, que o admin pode aprovar ou cancelar pelo Telegram.
-
-Nesta fase, o sistema ainda não envia e-mails reais. Essa foi uma decisão arquitetural: o CommerceOps prepara e aprova a ação, mas o envio real deve ser feito futuramente pela Lumora, por um endpoint seguro e auditado, já que é ela quem possui os dados do cliente, templates e configuração de mailer.
-
-Tecnologias usadas:
-.NET 8, ASP.NET Core, EF Core, PostgreSQL, Docker Compose, HttpClientFactory, HMAC SHA-256, Telegram Bot API e xUnit.
-
-O objetivo do projeto é explorar uma arquitetura segura para operação de e-commerce: diagnosticar rápido, reduzir investigação manual e colocar aprovação humana antes de qualquer ação sensível.
-```
-
 ## Contato
 
 - GitHub: [auhauhbr](https://github.com/auhauhbr)
