@@ -1,4 +1,5 @@
 using CommerceOps.Bot;
+using CommerceOps.Application.Lumora;
 using CommerceOps.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +30,7 @@ builder.Services.Configure<TelegramBotOptions>(options =>
 });
 
 builder.Services.AddSingleton<IAdminAuthorizationService, AdminAuthorizationService>();
+builder.Services.AddSingleton<ICustomerMessageDraftComposer, CustomerMessageDraftService>();
 builder.Services.AddScoped<TelegramCommandRouter>();
 builder.Services.AddHostedService<TelegramBotService>();
 
