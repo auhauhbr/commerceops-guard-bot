@@ -99,6 +99,14 @@ public sealed class LumoraClient : ILumoraClient
         {
             if (!response.IsSuccessStatusCode)
             {
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return LumoraClientResult<T>.Failure(
+                        "not_found",
+                        "Recurso nao encontrado na Lumora.",
+                        (int)response.StatusCode);
+                }
+
                 _logger.LogWarning(
                     "Lumora endpoint {Endpoint} returned non-success status {StatusCode}.",
                     path,
