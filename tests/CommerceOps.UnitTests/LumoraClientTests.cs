@@ -60,6 +60,40 @@ public sealed class LumoraClientTests
     }
 
     [Fact]
+    public async Task GetTriageCandidatesParsesItems()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+            {
+              "items": [
+                {
+                  "order_id": "327",
+                  "order_number": "327",
+                  "order_status": "pending",
+                  "payment_status": "approved",
+                  "payment_approved_at": "2026-07-07T11:48:00Z",
+                  "has_negative_stock": true,
+                  "total_value": 899.00,
+                  "updated_at": "2026-07-07T11:50:00Z",
+                  "findings": ["order_paid_but_pending"]
+                }
+              ]
+            }
+            """)
+        });
+        var client = CreateClient(handler, logger: new CapturingLogger<LumoraClient>());
+
+        var result = await client.GetTriageCandidatesAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("/commerceops/orders/triage-candidates", handler.LastRequest?.RequestUri?.PathAndQuery);
+        Assert.Single(result.Data!.Items);
+        Assert.Equal("327", result.Data.Items[0].OrderId);
+        Assert.True(result.Data.Items[0].HasNegativeStock);
+    }
+
+    [Fact]
     public async Task NonSuccessStatusReturnsFriendlyErrorWithoutLoggingSecret()
     {
         var logger = new CapturingLogger<LumoraClient>();

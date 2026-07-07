@@ -39,6 +39,20 @@ public sealed record LumoraOrderDiagnosticItem(
     [property: JsonPropertyName("product_exists")] bool? ProductExists,
     [property: JsonPropertyName("current_stock")] int? CurrentStock);
 
+public sealed record LumoraOrderTriageCandidatesResponse(
+    [property: JsonPropertyName("items")] IReadOnlyList<LumoraOrderTriageCandidate> Items);
+
+public sealed record LumoraOrderTriageCandidate(
+    [property: JsonPropertyName("order_id")] string OrderId,
+    [property: JsonPropertyName("order_number")] string? OrderNumber,
+    [property: JsonPropertyName("order_status")] string OrderStatus,
+    [property: JsonPropertyName("payment_status")] string? PaymentStatus,
+    [property: JsonPropertyName("payment_approved_at")] DateTimeOffset? PaymentApprovedAt,
+    [property: JsonPropertyName("has_negative_stock")] bool HasNegativeStock,
+    [property: JsonPropertyName("total_value")] decimal? TotalValue,
+    [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt,
+    [property: JsonPropertyName("findings")] IReadOnlyList<string>? Findings);
+
 public sealed record LumoraDiagnosticFinding(
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("severity")] string Severity,

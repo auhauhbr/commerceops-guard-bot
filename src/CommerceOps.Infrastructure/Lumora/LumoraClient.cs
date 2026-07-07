@@ -48,6 +48,10 @@ public sealed class LumoraClient : ILumoraClient
             cancellationToken);
     }
 
+    public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+        CancellationToken cancellationToken = default) =>
+        GetAsync<LumoraOrderTriageCandidatesResponse>("/commerceops/orders/triage-candidates", cancellationToken);
+
     public Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(
         CancellationToken cancellationToken = default) =>
         GetAsync<LumoraPaymentInconsistenciesResponse>("/commerceops/payments/inconsistencies", cancellationToken);

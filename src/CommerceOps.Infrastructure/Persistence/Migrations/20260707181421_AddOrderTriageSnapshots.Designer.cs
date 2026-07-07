@@ -3,6 +3,7 @@ using System;
 using CommerceOps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CommerceOps.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CommerceOpsDbContext))]
-    partial class CommerceOpsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707181421_AddOrderTriageSnapshots")]
+    partial class AddOrderTriageSnapshots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

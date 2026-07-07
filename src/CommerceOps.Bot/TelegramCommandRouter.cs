@@ -3,6 +3,7 @@ using System.Text.Json;
 using CommerceOps.Application.Actions;
 using CommerceOps.Application.Cases;
 using CommerceOps.Application.Lumora;
+using CommerceOps.Application.Triage;
 
 namespace CommerceOps.Bot;
 
@@ -11,7 +12,9 @@ public sealed class TelegramCommandRouter(
     IAdminAuthorizationService authorizationService,
     ILumoraClient lumoraClient,
     ICustomerMessageDraftComposer messageDraftComposer,
-    IActionRequestService actionRequestService)
+    IActionRequestService actionRequestService,
+    IOrderTriageService orderTriageService,
+    TimeProvider timeProvider)
 {
     private const int CaseListLimit = 10;
     private const int DiagnosticListLimit = 5;
@@ -49,6 +52,7 @@ public sealed class TelegramCommandRouter(
             "/casos" => TelegramCommandResponse.TextOnly(await OpenCasesMessageAsync(cancellationToken)),
             "/case" => TelegramCommandResponse.TextOnly(await CaseDetailsMessageAsync(argument, cancellationToken)),
             "/pedido" or "/p" => await OrderDiagnosticMessageAsync(argument, cancellationToken),
+            "/triagem" or "/tr" => await OrderTriageMessageAsync(cursor: null, cancellationToken),
             "/mensagem-pedido" or "/msg-pedido" or "/msg" or "/mensagem" => await CustomerMessageDraftMessageAsync(argument, cancellationToken),
             "/preparar-mensagem-pedido" or "/prep" or "/preparar" => await PrepareCustomerMessageActionAsync(argument, context.ChatId, cancellationToken),
             "/acoes" => await PendingActionsMessageAsync(cancellationToken),
@@ -110,8 +114,10 @@ public sealed class TelegramCommandRouter(
         {
             ("order", "findings") => TelegramCommandResponse.TextOnly(await OrderFindingsMessageAsync(parts[2], cancellationToken)),
             ("order", "items") => TelegramCommandResponse.TextOnly(await OrderItemsMessageAsync(parts[2], cancellationToken)),
+            ("order", "diagnostic") => await OrderDiagnosticMessageAsync(parts[2], cancellationToken),
             ("order", "draft") => await CustomerMessageDraftMessageAsync(parts[2], cancellationToken),
             ("order", "prepare") => await PrepareCustomerMessageActionAsync(parts[2], chatId, cancellationToken),
+            ("triage", "next") => await OrderTriageMessageAsync(ParseCursor(parts[2]), cancellationToken),
             ("draft", "full") => TelegramCommandResponse.TextOnly(await FullCustomerMessageDraftMessageAsync(parts[2], cancellationToken)),
             ("action", "approve") => TelegramCommandResponse.TextOnly(await ApproveActionMessageAsync(parts[2], chatId, cancellationToken)),
             ("action", "cancel") => TelegramCommandResponse.TextOnly(await CancelActionMessageAsync(parts[2], chatId, cancellationToken)),
@@ -130,9 +136,10 @@ public sealed class TelegramCommandRouter(
 
         return (parts[0], parts[1]) switch
         {
-            ("order", "findings") or ("order", "items") => $"Consultando pedido #{parts[2]}...",
+            ("order", "findings") or ("order", "items") or ("order", "diagnostic") => $"Consultando pedido #{parts[2]}...",
             ("order", "draft") or ("draft", "full") => "Gerando rascunho...",
             ("order", "prepare") => "Preparando ação pendente...",
+            ("triage", "next") => "Consultando triagem...",
             _ => null
         };
     }
@@ -154,6 +161,8 @@ public sealed class TelegramCommandRouter(
             /resumo - resumo operacional
             /casos - casos abertos
             /case CASE-00001 - detalhes do caso
+            /triagem - fila operacional priorizada
+            /tr - atalho para /triagem
             /pedido {id} - consulta pedido e abre botões
             /p {id} - atalho para /pedido
             /msg {id} - gera rascunho sem enviar
@@ -403,6 +412,56 @@ public sealed class TelegramCommandRouter(
         ];
     }
 
+    private async Task<TelegramCommandResponse> OrderTriageMessageAsync(
+        int? cursor,
+        CancellationToken cancellationToken)
+    {
+        const int pageSize = 10;
+        var skip = Math.Max(0, cursor ?? 0);
+        var snapshots = await orderTriageService.GetTopAsync(pageSize + 1, skip, cancellationToken);
+        if (snapshots.Count == 0)
+        {
+            return TelegramCommandResponse.TextOnly("""
+                Triagem operacional — Lumora
+
+                Nenhum pedido com risco médio ou alto no snapshot atual.
+                """);
+        }
+
+        var visibleSnapshots = snapshots.Take(pageSize).ToList();
+        var builder = new StringBuilder();
+        builder.AppendLine("Triagem operacional — Lumora");
+        builder.AppendLine();
+
+        var keyboard = new List<IReadOnlyList<TelegramInlineButton>>();
+        for (var index = 0; index < visibleSnapshots.Count; index++)
+        {
+            var snapshot = visibleSnapshots[index];
+            var orderReference = GetOrderReference(snapshot);
+            builder.AppendLine($"{index + 1}. Pedido #{orderReference}");
+            builder.AppendLine($"Risco: {FormatRiskLevel(snapshot.RiskLevel)}, score {snapshot.RiskScore}");
+            builder.AppendLine($"Problema: {FormatTriageProblem(snapshot)}");
+            builder.AppendLine($"Atualizado: {FormatRelativeAge(snapshot.SourceUpdatedAt, timeProvider.GetUtcNow())}");
+            builder.AppendLine();
+
+            keyboard.Add(
+            [
+                new TelegramInlineButton($"Investigar #{orderReference}", $"order:diagnostic:{snapshot.OrderId}"),
+                new TelegramInlineButton($"Preparar ação #{orderReference}", $"order:prepare:{snapshot.OrderId}")
+            ]);
+        }
+
+        if (snapshots.Count > pageSize)
+        {
+            keyboard.Add(
+            [
+                new TelegramInlineButton("Próximos", $"triage:next:{skip + pageSize}")
+            ]);
+        }
+
+        return new TelegramCommandResponse(builder.ToString().TrimEnd(), keyboard);
+    }
+
     private async Task<TelegramCommandResponse> PrepareCustomerMessageActionAsync(
         string orderId,
         long chatId,
@@ -554,7 +613,7 @@ public sealed class TelegramCommandRouter(
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine($"Achados — Pedido #{GetOrderReference(diagnostic.Data!)}");
+        builder.AppendLine($"Achados do pedido #{GetOrderReference(diagnostic.Data!)}");
         builder.AppendLine();
         AppendFindings(builder, diagnostic.Data!.Findings, limit: null);
         return builder.ToString().TrimEnd();
@@ -631,8 +690,10 @@ public sealed class TelegramCommandRouter(
         var visibleFindings = limit.HasValue ? findings.Take(limit.Value) : findings;
         foreach (var (finding, index) in visibleFindings.Select((finding, index) => (finding, index)))
         {
-            builder.AppendLine($"{index + 1}. {FormatValue(finding.Type)}");
-            builder.AppendLine($"   {FormatValue(finding.Message)}");
+            builder.AppendLine($"{index + 1}. {FormatFindingTitle(finding.Type)}");
+            builder.AppendLine(FormatFindingMessage(finding.Type, finding.Message));
+            builder.AppendLine($"Severidade: {FormatSeverity(finding.Severity)}");
+            builder.AppendLine();
         }
 
         if (limit.HasValue && findings.Count > limit.Value)
@@ -685,9 +746,121 @@ public sealed class TelegramCommandRouter(
             : diagnostic.OrderNumber;
     }
 
+    private static string GetOrderReference(OrderTriageSnapshotDetails snapshot)
+    {
+        return string.IsNullOrWhiteSpace(snapshot.OrderNumber)
+            ? snapshot.OrderId
+            : snapshot.OrderNumber;
+    }
+
     private static string FormatValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "não informado" : value;
+    }
+
+    private static string FormatFindingTitle(string type)
+    {
+        return type switch
+        {
+            "pending_order_without_approved_payment" => "Pedido aguardando pagamento",
+            "order_paid_but_pending" => "Pagamento aprovado, mas pedido ainda pendente",
+            "cancelled_order_with_approved_payment" => "Pedido cancelado com pagamento aprovado",
+            "order_without_items" => "Pedido sem itens",
+            "product_missing" => "Produto não encontrado",
+            "invalid_item_quantity" => "Quantidade inválida no item",
+            "order_total_mismatch" => "Total do pedido divergente",
+            "negative_stock" => "Estoque negativo",
+            "payment_missing" => "Pagamento não encontrado",
+            _ => FormatValue(type).Replace('_', ' ')
+        };
+    }
+
+    private static string FormatFindingMessage(string type, string? originalMessage)
+    {
+        return type switch
+        {
+            "pending_order_without_approved_payment" => "O pedido ainda está pendente e não possui pagamento aprovado.",
+            "order_paid_but_pending" => "O pedido possui pagamento aprovado, mas ainda não avançou para a próxima etapa operacional.",
+            "cancelled_order_with_approved_payment" => "O pedido está cancelado, mas possui pagamento aprovado. Pode exigir revisão operacional.",
+            "order_without_items" => "O pedido não possui itens associados.",
+            "product_missing" => "Um item do pedido referencia um produto que não foi encontrado.",
+            "invalid_item_quantity" => "Um item do pedido possui quantidade inválida.",
+            "order_total_mismatch" => "O total calculado dos itens não bate com o total registrado no pedido.",
+            "negative_stock" => "Um ou mais produtos relacionados ao pedido estão com estoque negativo.",
+            "payment_missing" => "Não foi encontrado registro de pagamento associado ao pedido.",
+            _ => FormatValue(originalMessage)
+        };
+    }
+
+    private static string FormatTriageProblem(OrderTriageSnapshotDetails snapshot)
+    {
+        if (!string.IsNullOrWhiteSpace(snapshot.Summary))
+        {
+            return snapshot.Summary;
+        }
+
+        if (!string.IsNullOrWhiteSpace(snapshot.LastFindingCode))
+        {
+            return FormatFindingTitle(snapshot.LastFindingCode).ToLowerInvariant();
+        }
+
+        return "pedido requer atenção operacional";
+    }
+
+    private static string FormatRiskLevel(string riskLevel)
+    {
+        return riskLevel switch
+        {
+            "low" => "baixo",
+            "medium" => "médio",
+            "high" => "alto",
+            "critical" => "crítico",
+            _ => FormatValue(riskLevel)
+        };
+    }
+
+    private static string FormatRelativeAge(DateTimeOffset updatedAt, DateTimeOffset now)
+    {
+        if (updatedAt >= now)
+        {
+            return "agora";
+        }
+
+        var age = now - updatedAt;
+        if (age.TotalMinutes < 1)
+        {
+            return "agora";
+        }
+
+        if (age.TotalHours < 1)
+        {
+            return $"há {(int)age.TotalMinutes} min";
+        }
+
+        if (age.TotalDays < 1)
+        {
+            return $"há {(int)age.TotalHours} h";
+        }
+
+        return $"há {(int)age.TotalDays} d";
+    }
+
+    private static int? ParseCursor(string value)
+    {
+        return int.TryParse(value, out var cursor) ? Math.Max(0, cursor) : null;
+    }
+
+    private static string FormatSeverity(string severity)
+    {
+        return severity switch
+        {
+            "info" => "informativa",
+            "low" => "baixa",
+            "medium" => "média",
+            "high" => "alta",
+            "critical" => "crítica",
+            _ => FormatValue(severity)
+        };
     }
 
     private static string FormatChannel(NotificationChannel channel)
