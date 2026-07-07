@@ -88,6 +88,10 @@ public sealed class LumoraHealthEndpointTests : IClassFixture<CommerceOpsApiFact
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

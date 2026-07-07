@@ -10,6 +10,7 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
     public DbSet<OperationalCase> OperationalCases => Set<OperationalCase>();
     public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
     public DbSet<ActionRequest> ActionRequests => Set<ActionRequest>();
+    public DbSet<OrderTriageSnapshot> OrderTriageSnapshots => Set<OrderTriageSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +140,41 @@ public sealed class CommerceOpsDbContext(DbContextOptions<CommerceOpsDbContext> 
                 actionRequest.EntityId,
                 actionRequest.Status
             }).HasDatabaseName("IX_action_requests_entity_status");
+        });
+
+        modelBuilder.Entity<OrderTriageSnapshot>(entity =>
+        {
+            entity.ToTable("order_triage_snapshots");
+
+            entity.HasKey(snapshot => snapshot.Id);
+            entity.Property(snapshot => snapshot.Id).ValueGeneratedNever();
+            entity.Property(snapshot => snapshot.OrderId).HasMaxLength(160).IsRequired();
+            entity.Property(snapshot => snapshot.OrderNumber).HasMaxLength(80);
+            entity.Property(snapshot => snapshot.RiskScore).IsRequired();
+            entity.Property(snapshot => snapshot.RiskLevel).HasMaxLength(32).IsRequired();
+            entity.Property(snapshot => snapshot.LastFindingCode).HasMaxLength(120);
+            entity.Property(snapshot => snapshot.Summary).HasMaxLength(1000);
+            entity.Property(snapshot => snapshot.OrderStatus).HasMaxLength(80).IsRequired();
+            entity.Property(snapshot => snapshot.PaymentStatus).HasMaxLength(80);
+            entity.Property(snapshot => snapshot.TotalValue).HasPrecision(18, 2);
+            entity.Property(snapshot => snapshot.SourceUpdatedAt).IsRequired();
+            entity.Property(snapshot => snapshot.RefreshedAt).IsRequired();
+            entity.Property(snapshot => snapshot.Notified).IsRequired();
+
+            entity.HasOne(snapshot => snapshot.ClientApplication)
+                .WithMany(application => application.OrderTriageSnapshots)
+                .HasForeignKey(snapshot => snapshot.ClientApplicationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(snapshot => new
+            {
+                snapshot.ClientApplicationId,
+                snapshot.OrderId
+            }).IsUnique();
+            entity.HasIndex(snapshot => snapshot.RiskScore)
+                .IsDescending();
+            entity.HasIndex(snapshot => snapshot.RiskLevel);
+            entity.HasIndex(snapshot => snapshot.RefreshedAt);
         });
     }
 }

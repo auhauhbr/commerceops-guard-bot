@@ -1,6 +1,7 @@
 using CommerceOps.Application.Actions;
 using CommerceOps.Application.Cases;
 using CommerceOps.Application.Lumora;
+using CommerceOps.Application.Triage;
 using CommerceOps.Bot;
 
 namespace CommerceOps.UnitTests;
@@ -140,6 +141,45 @@ public sealed class TelegramCommandRouterTests
     }
 
     [Fact]
+    public async Task RouteMessageAsyncListsOperationalTriage()
+    {
+        var triageService = new FakeOrderTriageService
+        {
+            Snapshots =
+            [
+                CreateTriageSnapshot(
+                    orderId: "327",
+                    score: 82,
+                    level: "high",
+                    summary: "pagamento aprovado, mas pedido ainda pendente",
+                    sourceUpdatedAt: DateTimeOffset.Parse("2026-07-07T11:48:00Z"))
+            ]
+        };
+        var router = CreateRouter(orderTriageService: triageService);
+
+        var response = await router.RouteMessageAsync(new TelegramCommandContext(1, 123, "/triagem"), CancellationToken.None);
+
+        Assert.Contains("Triagem operacional — Lumora", response.Text);
+        Assert.Contains("1. Pedido #327", response.Text);
+        Assert.Contains("Risco: alto, score 82", response.Text);
+        Assert.Contains("Problema: pagamento aprovado, mas pedido ainda pendente", response.Text);
+        Assert.Contains("Atualizado: há 12 min", response.Text);
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Investigar #327" && button.CallbackData == "order:diagnostic:327");
+        Assert.Contains(response.InlineKeyboard.SelectMany(row => row), button => button.Text == "Preparar ação #327" && button.CallbackData == "order:prepare:327");
+    }
+
+    [Fact]
+    public async Task RouteAsyncReturnsEmptyOperationalTriage()
+    {
+        var router = CreateRouter(orderTriageService: new FakeOrderTriageService());
+
+        var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/tr"), CancellationToken.None);
+
+        Assert.Contains("Triagem operacional — Lumora", response);
+        Assert.Contains("Nenhum pedido com risco médio ou alto", response);
+    }
+
+    [Fact]
     public async Task RouteCallbackAsyncShowsFullOrderFindings()
     {
         var router = CreateRouter(lumoraClient: new FakeLumoraClient(
@@ -147,9 +187,28 @@ public sealed class TelegramCommandRouterTests
 
         var response = await router.RouteCallbackAsync("order:findings:1", 1, 123, CancellationToken.None);
 
-        Assert.Contains("Achados — Pedido #1", response.Text);
-        Assert.Contains("pending_order_without_approved_payment", response.Text);
-        Assert.Contains("Order is pending and does not have an approved payment.", response.Text);
+        Assert.Contains("Achados do pedido #1", response.Text);
+        Assert.Contains("1. Pedido aguardando pagamento", response.Text);
+        Assert.Contains("O pedido ainda está pendente e não possui pagamento aprovado.", response.Text);
+        Assert.Contains("Severidade: informativa", response.Text);
+        Assert.DoesNotContain("pending_order_without_approved_payment", response.Text);
+        Assert.DoesNotContain("Order is pending and does not have an approved payment.", response.Text);
+    }
+
+    [Fact]
+    public async Task RouteCallbackAsyncShowsUnknownFindingWithSafeFallback()
+    {
+        var router = CreateRouter(lumoraClient: new FakeLumoraClient(
+            LumoraClientResult<LumoraOrderDiagnosticResponse>.Success(CreateDiagnostic(
+                findingType: "new_internal_check_failed",
+                findingSeverity: "experimental",
+                findingMessage: "New internal check failed."))));
+
+        var response = await router.RouteCallbackAsync("order:findings:1", 1, 123, CancellationToken.None);
+
+        Assert.Contains("1. new internal check failed", response.Text);
+        Assert.Contains("New internal check failed.", response.Text);
+        Assert.Contains("Severidade: experimental", response.Text);
     }
 
     [Fact]
@@ -471,18 +530,23 @@ public sealed class TelegramCommandRouterTests
         IOperationalCaseQueryService? queryService = null,
         bool isAuthorized = true,
         ILumoraClient? lumoraClient = null,
-        IActionRequestService? actionRequestService = null)
+        IActionRequestService? actionRequestService = null,
+        IOrderTriageService? orderTriageService = null)
     {
         return new TelegramCommandRouter(
             queryService ?? new FakeCaseQueryService(),
             new FakeAuthorizationService(isAuthorized),
             lumoraClient ?? new FakeLumoraClient(),
             new CustomerMessageDraftService(),
-            actionRequestService ?? new FakeActionRequestService());
+            actionRequestService ?? new FakeActionRequestService(),
+            orderTriageService ?? new FakeOrderTriageService(),
+            new FixedTimeProvider(DateTimeOffset.Parse("2026-07-07T12:00:00Z")));
     }
 
     private static LumoraOrderDiagnosticResponse CreateDiagnostic(
-        string findingType = "pending_order_without_approved_payment")
+        string findingType = "pending_order_without_approved_payment",
+        string findingSeverity = "info",
+        string findingMessage = "Order is pending and does not have an approved payment.")
     {
         return new LumoraOrderDiagnosticResponse(
             "1",
@@ -492,8 +556,8 @@ public sealed class TelegramCommandRouterTests
             [
                 new LumoraDiagnosticFinding(
                     findingType,
-                    "info",
-                    "Order is pending and does not have an approved payment.",
+                    findingSeverity,
+                    findingMessage,
                     null)
             ],
             "1 operational finding(s) detected.",
@@ -552,6 +616,31 @@ public sealed class TelegramCommandRouterTests
             null);
     }
 
+    private static OrderTriageSnapshotDetails CreateTriageSnapshot(
+        string orderId,
+        int score,
+        string level,
+        string? summary,
+        DateTimeOffset sourceUpdatedAt)
+    {
+        return new OrderTriageSnapshotDetails(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            orderId,
+            orderId,
+            score,
+            level,
+            "order_paid_but_pending",
+            summary,
+            "pending",
+            "approved",
+            899m,
+            sourceUpdatedAt,
+            DateTimeOffset.Parse("2026-07-07T12:00:00Z"),
+            false,
+            null);
+    }
+
     private sealed class FakeAuthorizationService(bool isAuthorized) : IAdminAuthorizationService
     {
         public bool IsAuthorized(long telegramUserId)
@@ -603,6 +692,10 @@ public sealed class TelegramCommandRouterTests
             OrderDiagnosticCalls++;
             return Task.FromResult(_orderDiagnosticResult);
         }
+
+        public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(
             CancellationToken cancellationToken = default) =>
@@ -687,6 +780,34 @@ public sealed class TelegramCommandRouterTests
             CancelledPublicId = publicId;
             CancelledByChatId = cancelledByChatId;
             return Task.FromResult(CancelResult);
+        }
+    }
+
+    private sealed class FakeOrderTriageService : IOrderTriageService
+    {
+        public IReadOnlyList<OrderTriageSnapshotDetails> Snapshots { get; init; } = [];
+
+        public Task RefreshAsync(Guid clientApplicationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<OrderTriageSnapshotDetails>> GetTopAsync(
+            int limit,
+            int? cursor = null,
+            CancellationToken cancellationToken = default)
+        {
+            var skip = Math.Max(0, cursor ?? 0);
+            return Task.FromResult<IReadOnlyList<OrderTriageSnapshotDetails>>(
+                Snapshots.Skip(skip).Take(limit).ToList());
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return now;
         }
     }
 }

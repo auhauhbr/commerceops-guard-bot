@@ -13,4 +13,5 @@ public sealed class ClientApplication
 
     public List<OperationalEvent> OperationalEvents { get; set; } = [];
     public List<OperationalCase> OperationalCases { get; set; } = [];
+    public List<OrderTriageSnapshot> OrderTriageSnapshots { get; set; } = [];
 }

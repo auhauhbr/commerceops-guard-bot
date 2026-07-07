@@ -1,11 +1,13 @@
 using CommerceOps.Application.Cases;
 using CommerceOps.Application.Actions;
 using CommerceOps.Application.Lumora;
+using CommerceOps.Application.Triage;
 using CommerceOps.Infrastructure.Lumora;
 using CommerceOps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace CommerceOps.Infrastructure;
@@ -34,6 +36,7 @@ public static class DependencyInjection
 
         services.AddDbContext<CommerceOpsDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("CommerceOps")));
+        services.TryAddSingleton(TimeProvider.System);
 
         services.AddSingleton<IOptions<LumoraOptions>>(_ =>
         {
@@ -65,9 +68,11 @@ public static class DependencyInjection
         });
 
         services.AddScoped<CaseRuleEvaluator>();
+        services.AddScoped<IOrderRiskScorer, OrderRiskScorer>();
         services.AddScoped<ICaseService, CaseService>();
         services.AddScoped<IOperationalCaseQueryService, OperationalCaseQueryService>();
         services.AddScoped<IActionRequestService, ActionRequestService>();
+        services.AddScoped<IOrderTriageService, OrderTriageService>();
         services.AddScoped<ClientApplicationSeeder>();
 
         return services;

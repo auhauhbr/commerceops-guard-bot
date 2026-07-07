@@ -148,6 +148,10 @@ public sealed class LumoraOrderDiagnosticEndpointTests : IClassFixture<CommerceO
             CancellationToken cancellationToken = default) =>
             Task.FromResult(_diagnosticResult);
 
+        public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
