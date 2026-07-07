@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommerceOps.Application.Cases;
+using CommerceOps.Application.Lumora;
 using CommerceOps.Application.Security;
 using CommerceOps.Domain;
 using CommerceOps.Infrastructure;
@@ -18,6 +19,45 @@ builder.Services.AddSingleton(TimeProvider.System);
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+app.MapGet("/api/integrations/lumora/health", async (
+    ILumoraClient lumoraClient,
+    CancellationToken cancellationToken) =>
+{
+    var result = await lumoraClient.GetHealthAsync(cancellationToken);
+
+    if (!result.IsSuccess || result.Data is null)
+    {
+        return Results.Ok(new
+        {
+            integration = "lumora",
+            status = "unavailable",
+            error_code = result.Error?.Code ?? "unknown_error",
+            message = GetSafeLumoraHealthMessage(result.Error?.Code)
+        });
+    }
+
+    return Results.Ok(new
+    {
+        integration = "lumora",
+        status = "available",
+        lumora_status = result.Data.Status,
+        checked_at = result.Data.CheckedAt,
+        database_status = result.Data.Database?.Status,
+        queue_status = result.Data.Queue?.Status
+    });
+});
+
+static string GetSafeLumoraHealthMessage(string? errorCode) =>
+    errorCode switch
+    {
+        "not_configured" => "Integracao Lumora nao configurada.",
+        "timeout" => "Tempo esgotado ao consultar a Lumora.",
+        "unavailable" => "Nao foi possivel conectar com a Lumora.",
+        "invalid_response" => "A Lumora retornou uma resposta invalida.",
+        "http_error" => "A Lumora retornou uma resposta de erro.",
+        _ => "Nao foi possivel consultar a Lumora."
+    };
 
 app.MapPost("/api/events", async (
     HttpRequest request,
