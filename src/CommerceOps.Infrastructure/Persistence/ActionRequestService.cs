@@ -53,6 +53,23 @@ public sealed class ActionRequestService(CommerceOpsDbContext dbContext, TimePro
         return actionRequests.Select(Map).ToList();
     }
 
+    public async Task<ActionRequestDetails?> GetByPublicIdAsync(
+        string publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(publicId))
+        {
+            return null;
+        }
+
+        var normalizedPublicId = publicId.Trim().ToUpperInvariant();
+        var actionRequest = await dbContext.ActionRequests
+            .AsNoTracking()
+            .SingleOrDefaultAsync(actionRequest => actionRequest.PublicId == normalizedPublicId, cancellationToken);
+
+        return actionRequest is null ? null : Map(actionRequest);
+    }
+
     public async Task<ActionRequestDetails?> ApproveAsync(
         string publicId,
         long approvedByChatId,
