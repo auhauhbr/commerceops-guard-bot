@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CommerceOps.Domain\CommerceOps.Domain.csproj" />
     <ProjectReference Include="..\..\src\CommerceOps.Application\CommerceOps.Application.csproj" />
+    <ProjectReference Include="..\..\src\CommerceOps.Infrastructure\CommerceOps.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\CommerceOps.Bot\CommerceOps.Bot.csproj" />
   </ItemGroup>
 

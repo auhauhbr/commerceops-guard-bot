@@ -1,4 +1,6 @@
 using CommerceOps.Application.Cases;
+using CommerceOps.Application.Lumora;
+using CommerceOps.Infrastructure.Lumora;
 using CommerceOps.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +33,35 @@ public static class DependencyInjection
 
         services.AddDbContext<CommerceOpsDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("CommerceOps")));
+
+        services.AddSingleton<IOptions<LumoraOptions>>(_ =>
+        {
+            var section = configuration.GetSection(LumoraOptions.SectionName);
+            var defaults = new LumoraOptions();
+            var configuredTimeout = configuration["LUMORA_HTTP_TIMEOUT_SECONDS"] ?? section["TimeoutSeconds"];
+
+            return Options.Create(new LumoraOptions
+            {
+                AppId = configuration["LUMORA_APP_ID"] ?? section["AppId"] ?? defaults.AppId,
+                BaseUrl = configuration["LUMORA_BASE_URL"] ?? section["BaseUrl"] ?? defaults.BaseUrl,
+                SharedSecret = configuration["LUMORA_SHARED_SECRET"] ?? section["SharedSecret"] ?? defaults.SharedSecret,
+                TimeoutSeconds = int.TryParse(configuredTimeout, out var timeoutSeconds)
+                    ? timeoutSeconds
+                    : defaults.TimeoutSeconds
+            });
+        });
+
+        services.AddHttpClient<ILumoraClient, LumoraClient>((serviceProvider, httpClient) =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<LumoraOptions>>().Value;
+
+            if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
+            {
+                httpClient.BaseAddress = baseUri;
+            }
+
+            httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+        });
 
         services.AddScoped<CaseRuleEvaluator>();
         services.AddScoped<ICaseService, CaseService>();
