@@ -53,6 +53,13 @@ public sealed class ActionRequestService(CommerceOpsDbContext dbContext, TimePro
         return actionRequests.Select(Map).ToList();
     }
 
+    public Task<int> CountPendingAsync(CancellationToken cancellationToken = default)
+    {
+        return dbContext.ActionRequests.CountAsync(
+            actionRequest => actionRequest.Status == ActionRequestStatuses.PendingApproval,
+            cancellationToken);
+    }
+
     public async Task<ActionRequestDetails?> GetByPublicIdAsync(
         string publicId,
         CancellationToken cancellationToken = default)

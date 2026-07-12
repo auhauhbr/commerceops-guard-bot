@@ -233,37 +233,86 @@ public sealed class TelegramCommandRouter(
 
     private async Task<string> SummaryMessageAsync(CancellationToken cancellationToken)
     {
-        var cases = await caseQueryService.ListOpenCasesAsync(50, cancellationToken);
-        if (cases.Count == 0)
+        const int pageSize = 50;
+        var snapshots = new List<OrderTriageSnapshotDetails>();
+        for (var cursor = 0;; cursor += pageSize)
         {
-            return """
-                Resumo operacional
+            var page = await orderTriageService.GetTopAsync(pageSize, cursor, cancellationToken);
+            snapshots.AddRange(page.Where(IsAttentionRisk));
+            if (page.Count < pageSize)
+            {
+                break;
+            }
+        }
 
-                Casos abertos: 0
+        var pendingActionCount = await actionRequestService.CountPendingAsync(cancellationToken);
+        if (snapshots.Count == 0)
+        {
+            return $"""
+                Resumo operacional — Lumora
+
+                Não há pedidos em atenção no snapshot atual.
+
+                Ações pendentes: {pendingActionCount}
+
+                Comandos úteis:
+                /tr - ver fila priorizada
+                /acoes - ver ações pendentes
                 """;
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine("Resumo operacional");
+        builder.AppendLine("Resumo operacional — Lumora");
         builder.AppendLine();
-        builder.AppendLine($"Casos abertos: {cases.Count}");
+        builder.AppendLine($"Pedidos em atenção: {snapshots.Count}");
+        builder.AppendLine($"Alto risco: {snapshots.Count(snapshot => RiskIs(snapshot, "high"))}");
+        builder.AppendLine($"Médio risco: {snapshots.Count(snapshot => RiskIs(snapshot, "medium"))}");
         builder.AppendLine();
-        builder.AppendLine("Por risco:");
+        builder.AppendLine("Principais problemas:");
 
-        foreach (var group in cases.GroupBy(currentCase => currentCase.RiskLevel).OrderBy(group => group.Key))
+        foreach (var group in snapshots
+                     .GroupBy(snapshot => snapshot.LastFindingCode, StringComparer.OrdinalIgnoreCase)
+                     .OrderByDescending(group => group.Count())
+                     .ThenBy(group => FormatSummaryFinding(group.Key), StringComparer.CurrentCulture))
         {
-            builder.AppendLine($"{group.Key}: {group.Count()}");
+            builder.AppendLine($"- {FormatSummaryFinding(group.Key)}: {group.Count()}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("Por status:");
-
-        foreach (var group in cases.GroupBy(currentCase => currentCase.Status).OrderBy(group => group.Key))
-        {
-            builder.AppendLine($"{group.Key}: {group.Count()}");
-        }
+        builder.AppendLine($"Ações pendentes: {pendingActionCount}");
+        builder.AppendLine($"Última atualização: {FormatRelativeAge(snapshots.Max(snapshot => snapshot.RefreshedAt), timeProvider.GetUtcNow())}");
+        builder.AppendLine();
+        builder.AppendLine("Comandos úteis:");
+        builder.AppendLine("/tr - ver fila priorizada");
+        builder.AppendLine("/acoes - ver ações pendentes");
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static bool IsAttentionRisk(OrderTriageSnapshotDetails snapshot) =>
+        RiskIs(snapshot, "high") || RiskIs(snapshot, "medium");
+
+    private static bool RiskIs(OrderTriageSnapshotDetails snapshot, string riskLevel) =>
+        string.Equals(snapshot.RiskLevel, riskLevel, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatSummaryFinding(string? findingCode)
+    {
+        return findingCode switch
+        {
+            "order_paid_but_pending" => "Pagamento aprovado, pedido pendente",
+            "negative_stock" => "Estoque negativo",
+            "order_total_mismatch" => "Total inconsistente",
+            "pending_order_without_approved_payment" => "Pedido pendente sem pagamento aprovado",
+            "cancelled_order_with_approved_payment" => "Pedido cancelado com pagamento aprovado",
+            "order_without_items" => "Pedido sem itens",
+            "product_missing" => "Produto não encontrado",
+            "invalid_item_quantity" => "Quantidade inválida no item",
+            "payment_missing" => "Pagamento não encontrado",
+            "high_value_pending_order" => "Pedido de alto valor pendente",
+            "stale_order" => "Pedido sem atualização recente",
+            null or "" => "Problema não informado",
+            _ => FormatFindingTitle(findingCode)
+        };
     }
 
     private async Task<TelegramCommandResponse> OrderDiagnosticMessageAsync(string orderId, CancellationToken cancellationToken)

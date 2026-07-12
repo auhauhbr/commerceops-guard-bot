@@ -51,6 +51,8 @@ public interface IActionRequestService
         int limit,
         CancellationToken cancellationToken = default);
 
+    Task<int> CountPendingAsync(CancellationToken cancellationToken = default);
+
     Task<ActionRequestDetails?> GetByPublicIdAsync(
         string publicId,
         CancellationToken cancellationToken = default);
