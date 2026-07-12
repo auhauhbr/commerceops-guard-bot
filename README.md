@@ -2,444 +2,345 @@
 
 <div align="center">
 
-<img src="assets/commerceops-guard-logo.png" alt="CommerceOps Guard logo" width="520">
-
-<pre>
-╔══════════════════════════════════════════════╗
-║              COMMERCEOPS GUARD              ║
-║        monitor · diagnose · approve         ║
-╚══════════════════════════════════════════════╝
-</pre>
+<img src="assets/commerceops-guard-logo.png" alt="Logo do CommerceOps Guard" width="520">
 
 # CommerceOps Guard
 
-### ChatOps defensivo para diagnóstico e aprovação de ações operacionais em e-commerce
+### ChatOps operacional seguro para e-commerce
 
-O CommerceOps Guard é uma camada operacional externa para receber eventos, diagnosticar inconsistências, consultar a Lumora por API segura e conduzir ações com aprovação explícita pelo admin no Telegram.
+Uma camada externa em .NET 8 para identificar pedidos com risco, priorizar problemas operacionais e acompanhar ações sensíveis com confirmação humana.
 
 <p>
   <img src="https://img.shields.io/badge/.NET-8-512BD4?style=flat-square&logo=dotnet&logoColor=white" alt=".NET 8">
   <img src="https://img.shields.io/badge/ASP.NET_Core-Minimal_API-512BD4?style=flat-square&logo=dotnet&logoColor=white" alt="ASP.NET Core Minimal API">
-  <img src="https://img.shields.io/badge/EF_Core-8-512BD4?style=flat-square&logo=dotnet&logoColor=white" alt="Entity Framework Core 8">
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 16">
   <img src="https://img.shields.io/badge/Telegram-Bot_API-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram Bot API">
-  <img src="https://img.shields.io/badge/xUnit-tests-512BD4?style=flat-square" alt="xUnit">
+  <img src="https://img.shields.io/badge/IA-OpenAI_%7C_Ollama-10A37F?style=flat-square" alt="OpenAI e Ollama">
+  <img src="https://img.shields.io/badge/status-em_desenvolvimento-F59E0B?style=flat-square" alt="Status: em desenvolvimento">
 </p>
 
-<p>
-  <img src="https://img.shields.io/badge/status-MVP_operacional-F59E0B?style=flat-square" alt="Status: MVP operacional">
-  <img src="https://img.shields.io/badge/email-real%20send%20not%20implemented-6B7280?style=flat-square" alt="Envio real de e-mail ainda não implementado">
-</p>
+[Repositório CommerceOps Guard](https://github.com/auhauhbr/commerceops-guard-bot.git) · [Cliente de referência Lumora](https://github.com/auhauhbr/lumora-eccomerce-em-laravel-react.git)
 
 </div>
 
-## Sobre
-
-O CommerceOps Guard nasceu para resolver um problema comum em operações de e-commerce: quando pedido, pagamento, estoque, webhooks e filas entram em estados divergentes, a investigação costuma ser manual, demorada e arriscada.
-
-Este projeto atua como uma camada externa e segura. Ele não substitui as regras de negócio da loja e não acessa diretamente o banco da Lumora. Em vez disso, recebe eventos assinados, consulta endpoints internos protegidos da Lumora, monta diagnósticos e permite que um admin aprove ou cancele ações pendentes pelo Telegram.
-
-Neste estágio, o projeto já possui:
-
-- API em .NET 8 com Minimal APIs;
-- persistência operacional com Entity Framework Core e PostgreSQL;
-- ingestão de eventos protegida por HMAC;
-- criação de casos operacionais a partir de regras de domínio;
-- integração HTTP segura com a Lumora;
-- diagnóstico de pedido por endpoint interno;
-- bot Telegram para ChatOps;
-- geração de rascunho de mensagem ao cliente;
-- fluxo de ActionRequest para aprovação/cancelamento de ações;
-- testes unitários e de integração.
-
 > [!IMPORTANT]
-> O envio real de e-mail ainda não foi implementado. O sistema cria rascunhos e ActionRequests aprováveis, mas não chama Gmail API, SMTP ou endpoint de envio da Lumora nesta etapa.
+> O projeto está em desenvolvimento e ainda não deve ser considerado pronto para produção. Ações sensíveis exigem aprovação humana e, no estágio atual, a aprovação é registrada, mas não altera automaticamente pedidos, pagamentos ou estoque.
 
-## Problemas Que O Projeto Endereça
+## O problema
 
-O CommerceOps Guard foi pensado para incidentes como:
+Operações de e-commerce frequentemente precisam correlacionar estados de pedido, pagamento, estoque e itens para descobrir situações como pagamento aprovado com pedido pendente ou pedido cancelado que ainda possui pagamento aprovado. Quando essa investigação depende de consultas manuais em diferentes sistemas, a resposta fica lenta, difícil de priorizar e mais sujeita a erros.
 
-- pedido pendente sem pagamento aprovado;
-- pagamento aprovado com pedido ainda pendente;
-- pedido cancelado com pagamento aprovado;
-- divergência entre status local e provedor externo;
-- estoque inconsistente;
-- webhook duplicado, ausente ou não processado;
-- criação automática de casos operacionais com evidências;
-- necessidade de aprovação humana antes de qualquer ação sensível.
+O CommerceOps Guard concentra essa triagem em uma camada operacional separada da loja. Ele ajuda equipes de suporte, operação e tecnologia a:
 
-## Arquitetura
+- localizar pedidos que merecem atenção;
+- classificar e ordenar riscos operacionais;
+- consultar diagnósticos sem acesso direto ao banco da loja;
+- gerar rascunhos e preparar ações assistidas;
+- registrar aprovação ou cancelamento antes de uma ação sensível.
 
-```mermaid
-flowchart LR
-    Lumora["Lumora<br/>e-commerce cliente"] -->|"eventos HMAC<br/>POST /api/events"| API["CommerceOps.Api<br/>Minimal API"]
-    API --> APP["CommerceOps.Application<br/>casos de uso"]
-    APP --> DOMAIN["CommerceOps.Domain<br/>entidades e regras"]
-    API --> INFRA["CommerceOps.Infrastructure<br/>EF Core + LumoraClient"]
-    INFRA --> PG[("PostgreSQL")]
-    BOT["CommerceOps.Bot<br/>Telegram ChatOps"] --> APP
-    BOT -->|"consulta via ILumoraClient"| INFRA
-    INFRA -->|"GET seguro HMAC"| Lumora
+## Visão do produto
+
+O objetivo é oferecer uma plataforma de ChatOps operacional reutilizável por qualquer e-commerce, ERP ou plataforma de loja que exponha uma API de integração segura. O CommerceOps Guard não substitui as regras de negócio do sistema cliente e não é uma IA autônoma: ele organiza evidências, recomenda prioridades e mantém uma pessoa no controle das decisões sensíveis.
+
+A interface atual é um bot Telegram, mas o produto não se resume ao bot. API, worker, persistência, classificação de risco, integrações e fluxo de aprovação formam o serviço externo que sustenta a operação assistida.
+
+## Como funciona
+
+1. O e-commerce envia eventos operacionais assinados ou disponibiliza pedidos candidatos por endpoints protegidos.
+2. A API valida origem, assinatura HMAC e janela contra replay antes de registrar eventos.
+3. O worker consulta periodicamente candidatos, coleta diagnósticos e persiste `OrderTriageSnapshot`s no PostgreSQL.
+4. Regras determinísticas — opcionalmente complementadas por OpenAI ou Ollama — classificam o risco.
+5. O bot apresenta resumo, triagem, diagnóstico, casos e ações pendentes a administradores autorizados.
+6. Uma ação sensível é criada como `ActionRequest` e só pode avançar após confirmação humana explícita.
+
+## Arquitetura em alto nível
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ E-commerce / ERP / plataforma de loja                       │
+│ Endpoints operacionais próprios e protegidos                 │
+└───────────────┬───────────────────────────▲──────────────────┘
+                │ eventos e consultas HMAC  │ diagnóstico
+                ▼                           │
+┌──────────────────────────────────────────────────────────────┐
+│ CommerceOps Guard — serviço externo em .NET 8               │
+│                                                              │
+│  CommerceOps.Api ──► Application / Domain ◄── Worker         │
+│         │                    │                  │             │
+│         └──────────► Infrastructure ◄──────────┘             │
+│                              │                               │
+│                    PostgreSQL (eventos, casos,                │
+│                    findings, snapshots e ações)              │
+│                              │                               │
+│                    OpenAI ou Ollama (opcional)                │
+│                    + fallback determinístico                 │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ consultas e aprovação humana
+                               ▼
+                     ┌────────────────────┐
+                     │ CommerceOps.Bot    │
+                     │ Telegram ChatOps   │
+                     └────────────────────┘
 ```
 
-### Projetos
+### Organização da solution
 
 ```text
 src/
-├── CommerceOps.Api/              # API HTTP, eventos, health, integrações Lumora
-├── CommerceOps.Application/      # contratos, casos de uso, composer de mensagens, actions
-├── CommerceOps.Bot/              # bot Telegram e roteamento de comandos
-├── CommerceOps.Contracts/        # contratos compartilhados
-├── CommerceOps.Domain/           # entidades de domínio
-├── CommerceOps.Infrastructure/   # EF Core, migrations, LumoraClient, persistência
-└── CommerceOps.Worker/           # worker background preparado
+├── CommerceOps.Api/              # Minimal APIs e ingestão de eventos
+├── CommerceOps.Worker/           # atualização periódica da triagem
+├── CommerceOps.Bot/              # interface ChatOps no Telegram
+├── CommerceOps.Application/      # casos de uso e contratos da aplicação
+├── CommerceOps.Domain/           # entidades e regras de domínio
+├── CommerceOps.Infrastructure/   # EF Core, PostgreSQL, HTTP e provedores de IA
+└── CommerceOps.Contracts/        # contratos compartilhados
 
 tests/
 ├── CommerceOps.UnitTests/
 └── CommerceOps.IntegrationTests/
 ```
 
-## Stack
+## Funcionalidades implementadas
 
-| Tecnologia | Uso no projeto |
-|---|---|
-| .NET 8 | runtime principal |
-| ASP.NET Core Minimal APIs | API HTTP do CommerceOps |
-| Entity Framework Core 8 | mapeamento e persistência |
-| PostgreSQL 16 | banco operacional em produção/local |
-| SQLite in-memory | testes de integração |
-| HttpClientFactory | integração HTTP com Lumora |
-| HMAC SHA-256 | assinatura de eventos recebidos e chamadas à Lumora |
-| Telegram Bot API | interface ChatOps para admins |
-| xUnit | testes unitários e de integração |
-| Docker Compose | PostgreSQL e Redis locais |
+- solution em camadas com .NET 8;
+- API interna com ASP.NET Core Minimal APIs;
+- PostgreSQL com Entity Framework Core e migrations;
+- Docker Compose para PostgreSQL e Redis locais — Redis ainda não é essencial ao fluxo atual;
+- ingestão e persistência de eventos operacionais assinados com HMAC;
+- criação e consulta de casos operacionais e `findings`;
+- diagnóstico de pedido por API segura do e-commerce;
+- triagem operacional persistida em `OrderTriageSnapshot`;
+- worker periódico para buscar candidatos e atualizar snapshots;
+- classificação determinística de risco;
+- classificação opcional com OpenAI ou Ollama local;
+- guardrails e fallback determinístico para respostas de IA;
+- bot Telegram com restrição por administradores autorizados;
+- geração de rascunho de mensagem sem envio automático;
+- fluxo de `ActionRequest` com aprovação e cancelamento humanos;
+- testes unitários e de integração.
 
-Redis está disponível no `docker-compose.yml`, mas ainda não é parte essencial do fluxo implementado.
+### Casos operacionais tratados
 
-## API Implementada
+- pagamento aprovado, mas pedido ainda pendente;
+- pedido pendente sem pagamento aprovado;
+- pagamento ausente;
+- estoque negativo;
+- item de pedido com produto ausente;
+- quantidade inválida;
+- divergência no total do pedido;
+- pedido cancelado com pagamento aprovado;
+- pedido sem itens.
 
-### Health
+## Segurança e decisões de projeto
 
-```http
-GET /health
+- **Sem acesso direto ao banco da loja:** o CommerceOps Guard consome apenas endpoints operacionais expostos pelo sistema cliente.
+- **Integrações explícitas:** cada e-commerce deve implementar seus próprios endpoints seguros e contratos de diagnóstico/candidatos.
+- **HMAC SHA-256:** eventos recebidos e chamadas à integração de referência usam assinatura HMAC; a ingestão também valida uma janela contra replay.
+- **Segredos fora do código:** tokens, chaves e segredos compartilhados devem ser fornecidos por variáveis de ambiente ou um cofre de segredos.
+- **Acesso restrito ao bot:** somente IDs configurados como administradores podem executar comandos.
+- **Human in the loop:** ações sensíveis são preparadas como solicitações pendentes e exigem confirmação humana explícita.
+- **Sem mutação automática:** o estágio atual não altera pedidos, pagamentos ou estoque e não envia mensagens automaticamente.
+- **Respostas seguras:** falhas de integração não devem expor stack traces, chaves, assinaturas ou URLs privadas ao operador.
+
+## IA: OpenAI, Ollama e fallback determinístico
+
+A IA é opcional e participa da classificação de risco; ela não executa ações nem decide sozinha sobre pedidos. O pipeline implementado inclui `IOrderRiskClassifier`, provedores OpenAI e Ollama e o `AiRiskAssessmentGuardrail`.
+
+Antes do uso, a resposta do modelo precisa respeitar o JSON esperado e regras como faixas válidas de score e confiança, coerência entre score e nível de risco, códigos de finding permitidos e limites de texto. Se a IA estiver desativada, não configurada, exceder o timeout, falhar, retornar JSON inválido ou tiver a resposta rejeitada, o sistema usa a classificação determinística.
+
+### Sem IA
+
+```bash
+export AI_RISK_ENABLED=false
 ```
 
-Retorna:
+### OpenAI
 
-```json
-{ "status": "healthy" }
+```bash
+export AI_RISK_ENABLED=true
+export AI_RISK_PROVIDER=openai
+export AI_RISK_MODEL=gpt-4.1-nano
+export OPENAI_API_KEY=<sua-chave-aqui>
+export AI_RISK_TIMEOUT_SECONDS=30
 ```
 
-### Eventos Operacionais
+Nunca versione a chave da API.
 
-```http
-POST /api/events
+### Ollama local
+
+Com o [Ollama](https://ollama.com/) instalado e em execução, disponibilize o modelo escolhido e configure o worker:
+
+```bash
+ollama pull qwen2.5:7b
+
+export AI_RISK_ENABLED=true
+export AI_RISK_PROVIDER=ollama
+export AI_RISK_MODEL=qwen2.5:7b
+export OLLAMA_BASE_URL=http://127.0.0.1:11434
+export AI_RISK_TIMEOUT_SECONDS=30
+
+dotnet run --project src/CommerceOps.Worker
 ```
 
-Recebe eventos da aplicação cliente. A requisição exige:
+O provedor usa a API de chat do Ollama em `/api/chat`. Se o serviço local estiver indisponível, o fallback determinístico mantém a triagem funcional.
 
-- `X-CommerceOps-App`
-- `X-CommerceOps-Timestamp`
-- `X-CommerceOps-Signature`
+## Integração com e-commerces
 
-A API valida janela de replay, app ativo e assinatura HMAC antes de persistir o evento e avaliar regras operacionais.
+O sistema cliente continua responsável por seus dados e regras. Para integrar uma nova loja, ela deve expor endpoints operacionais autenticados, retornar contratos compatíveis e validar as chamadas recebidas. O CommerceOps Guard consulta esses endpoints via HTTP; ele não recebe credenciais do banco e não executa consultas SQL no banco do cliente.
 
-### Casos Operacionais
+O contrato hoje validado pela integração de referência inclui:
 
 ```http
-GET /api/cases
-GET /api/cases/{id}
-```
-
-Lista e detalha casos criados a partir dos eventos recebidos.
-
-### Integração Lumora
-
-```http
-GET /api/integrations/lumora/health
-GET /api/integrations/lumora/orders/{id}/diagnostic
-```
-
-O diagnóstico interno consulta a Lumora em:
-
-```http
+GET /commerceops/orders/triage-candidates
 GET /commerceops/orders/{id}/diagnostic
 ```
 
-A assinatura HMAC da chamada fica encapsulada no `LumoraClient`. A API e o bot não duplicam lógica de assinatura.
+As requisições usam os headers `X-CommerceOps-App`, `X-CommerceOps-Timestamp` e `X-CommerceOps-Signature`. Para outros clientes, o conector e os contratos podem ser adaptados mantendo os mesmos princípios de isolamento, autenticação e mínimo privilégio.
 
-Campos esperados no diagnóstico:
+### Lumora: cliente de referência
 
-- `order_id`
-- `status`
-- `payment_status`
-- `stock_status`
-- `findings`
-- `summary`
-- `risk`
-- `order_number`
-- `total`
-- `subtotal`
-- `shipping_value`
-- `created_at`
-- `updated_at`
-- `items`
+A [Lumora](https://github.com/auhauhbr/lumora-eccomerce-em-laravel-react.git), construída com Laravel e React, é uma implementação de referência provisória usada para validar o CommerceOps Guard contra uma integração real. Ela não define o limite do produto e não é uma dependência conceitual da plataforma.
+
+O código atual ainda nomeia o primeiro conector como `LumoraClient` e expõe endpoints internos de integração com esse nome. A evolução prevista é adicionar conectores e suporte a múltiplos clientes sem tornar a Lumora um requisito.
 
 ## Bot Telegram
 
-O bot é um host .NET que usa polling da Telegram Bot API. O acesso é restrito por `TELEGRAM_ALLOWED_ADMIN_IDS` ou pela seção `Telegram:AllowedAdminIds`.
+O bot usa polling da Telegram Bot API e restringe o acesso por `TELEGRAM_ALLOWED_ADMIN_IDS`.
 
-Comandos atuais:
+| Comando | Finalidade |
+|---|---|
+| `/start` | inicia a interação |
+| `/help` | mostra a ajuda |
+| `/resumo` | exibe o resumo operacional |
+| `/casos` | lista casos abertos |
+| `/case {id}` | mostra detalhes de um caso |
+| `/triagem` ou `/tr` | mostra a fila priorizada |
+| `/pedido {id}` ou `/p {id}` | consulta o diagnóstico de um pedido |
+| `/mensagem-pedido {id}` ou `/msg {id}` | gera um rascunho, sem enviar |
+| `/preparar-mensagem-pedido {id}` | cria uma ação pendente |
+| `/acoes` | lista ações pendentes |
+| `/confirmar-acao {id}` | aprova uma ação pendente |
+| `/cancelar-acao {id}` | cancela uma ação pendente |
 
-```text
-/start
-/help
-/resumo
-/casos
-/case {id}
-/pedido {id}
-/mensagem-pedido {id}
-/msg-pedido {id}
-/preparar-mensagem-pedido {id}
-/acoes
-/confirmar-acao {id}
-/cancelar-acao {id}
-```
+Há também aliases curtos exibidos por `/help`, como `/prep`, `/confirmar` e `/cancelar`. Aprovar uma ação registra status, responsável e horário; não significa que a alteração ou o envio tenha sido executado.
 
-### Diagnóstico de Pedido
-
-```text
-/pedido 1
-```
-
-Consulta a Lumora via `ILumoraClient` e responde de forma compacta:
-
-```text
-Pedido #1 — Diagnóstico Lumora
-
-Status do pedido: pending_payment
-Pagamento: pending
-Estoque: ok
-Risco: low
-
-Achados:
-1. pending_order_without_approved_payment
-   Order is pending and does not have an approved payment.
-
-Itens:
-- Ponto De Acesso Ubiquiti UniFi U6+ Wi-Fi 6 Interno
-  qtd: 1
-  total: R$ 899.00
-  estoque atual: 8
-
-Resumo:
-1 operational finding(s) detected.
-```
-
-### Rascunho de Mensagem
-
-```text
-/mensagem-pedido 1
-/msg-pedido 1
-```
-
-Gera um rascunho seguro, sem enviar nada:
-
-```text
-Rascunho de mensagem para cliente — Pedido #1
-
-Canal sugerido: email
-Assunto: Atualização sobre seu pedido #1
-
-Mensagem:
-Olá! Identificamos que seu pedido #1 foi criado com sucesso e ainda está aguardando confirmação de pagamento.
-
-Status:
-Rascunho gerado. Nenhuma mensagem foi enviada.
-```
-
-O serviço responsável é `CustomerMessageDraftService`, que hoje possui templates para:
-
-- `pending_order_without_approved_payment`
-- `order_paid_but_pending`
-- `cancelled_order_with_approved_payment`
-- fallback genérico
-
-### ActionRequests
-
-```text
-/preparar-mensagem-pedido 1
-```
-
-Consulta o diagnóstico, gera o rascunho e cria uma ação pendente no banco:
-
-```text
-Ação pendente criada: ACT-00001
-
-Tipo: customer_message_email
-Pedido: #1
-Risco: low
-Status: pending_approval
-
-Assunto:
-Atualização sobre seu pedido #1
-
-Mensagem:
-Olá! Identificamos que seu pedido #1 foi criado com sucesso...
-
-Nenhuma mensagem foi enviada.
-
-Para confirmar:
- /confirmar-acao ACT-00001
-
-Para cancelar:
- /cancelar-acao ACT-00001
-```
-
-Outros comandos:
-
-```text
-/acoes
-/confirmar-acao ACT-00001
-/cancelar-acao ACT-00001
-```
-
-Confirmar uma ActionRequest muda o status para `approved`, registra quem confirmou e quando confirmou, mas ainda não executa envio real. Cancelar muda o status para `cancelled`.
-
-## Modelo De Dados Principal
-
-Entidades principais:
-
-- `ClientApplication`
-- `OperationalEvent`
-- `OperationalCase`
-- `CaseFinding`
-- `ActionRequest`
-
-`ActionRequest` guarda:
-
-- `PublicId`, exemplo `ACT-00001`;
-- `Type`, exemplo `customer_message_email`;
-- `Status`, exemplo `pending_approval`, `approved`, `cancelled`;
-- entidade relacionada, exemplo `order` e `1`;
-- risco e motivo;
-- `PayloadJson` com `channel`, `subject`, `body`, `order_id`, `order_number`, `findings` e `warning`;
-- chat ID de criação, aprovação e cancelamento;
-- timestamps de criação, aprovação, cancelamento e execução futura.
-
-O payload não deve armazenar segredos, assinatura HMAC, token do Telegram, URL privada, headers ou dados sensíveis desnecessários.
-
-## Segurança
-
-Princípios adotados:
-
-- o CommerceOps não acessa diretamente o banco da Lumora;
-- chamadas para a Lumora passam pelo `LumoraClient`;
-- assinatura HMAC fica encapsulada no cliente de infraestrutura;
-- eventos recebidos são validados com HMAC e janela anti-replay;
-- bot exige admin autorizado;
-- respostas não expõem stack trace, segredo, assinatura ou URL sensível;
-- ações sensíveis passam por aprovação explícita;
-- envio real de e-mail ainda não existe nesta fase.
-
-## Como Executar Localmente
+## Como rodar localmente
 
 ### Pré-requisitos
 
 - .NET SDK 8;
-- Docker com Docker Compose.
+- Docker com Docker Compose;
+- um bot Telegram e uma integração de e-commerce configurados para testar esses fluxos;
+- Ollama apenas se a classificação local por IA for utilizada.
 
-### Subir infraestrutura
+### 1. Configure o ambiente
+
+O repositório possui um `.env.example` para a infraestrutura local. Copie-o e substitua apenas valores locais quando necessário:
 
 ```bash
 cp .env.example .env
+```
+
+Para processos .NET, use variáveis de ambiente ou User Secrets. Não inclua segredos reais em commits.
+
+### 2. Rode a infraestrutura
+
+```bash
 docker compose up -d
 ```
 
-### API
+### 3. Restaure e compile
 
 ```bash
-dotnet restore
-dotnet run --project src/CommerceOps.Api -- --urls http://localhost:5073
+dotnet restore CommerceOpsGuard.sln
+dotnet build CommerceOpsGuard.sln --no-restore /m:1
 ```
 
-Teste:
+### 4. Rode os serviços
+
+Em terminais separados:
 
 ```bash
-curl -i http://localhost:5073/health
-curl -i http://localhost:5073/api/integrations/lumora/health
-curl -i http://localhost:5073/api/integrations/lumora/orders/1/diagnostic
+dotnet run --project src/CommerceOps.Api
 ```
-
-### Bot Telegram
-
-Configure variáveis de ambiente:
 
 ```bash
-export TELEGRAM_BOT_TOKEN="seu-token"
-export TELEGRAM_ALLOWED_ADMIN_IDS="123456789"
+dotnet run --project src/CommerceOps.Worker
 ```
-
-Execute:
 
 ```bash
 dotnet run --project src/CommerceOps.Bot
 ```
 
-### Lumora
+A API oferece `GET /health`. Para que o worker processe a triagem fora do ambiente Development, habilite `TRIAGE_REFRESH_ENABLED=true`.
 
-Para integrar com a Lumora, configure:
+## Variáveis de ambiente principais
+
+| Variável | Uso |
+|---|---|
+| `ConnectionStrings__CommerceOps` | conexão PostgreSQL dos serviços .NET |
+| `TELEGRAM_BOT_TOKEN` | token do bot Telegram |
+| `TELEGRAM_ALLOWED_ADMIN_IDS` | IDs autorizados, separados conforme configuração do bot |
+| `LUMORA_APP_ID` | identificador da integração de referência |
+| `LUMORA_BASE_URL` | URL-base da Lumora |
+| `LUMORA_SHARED_SECRET` | segredo compartilhado para HMAC |
+| `LUMORA_HTTP_TIMEOUT_SECONDS` | timeout HTTP da integração |
+| `TRIAGE_REFRESH_ENABLED` | habilita o ciclo periódico do worker |
+| `TRIAGE_REFRESH_INTERVAL_SECONDS` | intervalo entre atualizações |
+| `TRIAGE_REFRESH_LOOKBACK_MINUTES` | janela de busca de candidatos |
+| `TRIAGE_REFRESH_LIMIT` | limite de candidatos por ciclo |
+| `TRIAGE_REFRESH_CLIENT_PUBLIC_ID` | cliente associado aos snapshots |
+| `AI_RISK_ENABLED` | habilita ou desabilita IA |
+| `AI_RISK_PROVIDER` | `openai` ou `ollama` |
+| `AI_RISK_MODEL` | modelo utilizado pelo provedor |
+| `AI_RISK_TIMEOUT_SECONDS` | timeout da classificação, limitado a 30 segundos |
+| `OPENAI_API_KEY` | chave da OpenAI, quando aplicável |
+| `OLLAMA_BASE_URL` | URL-base do Ollama local |
+
+Exemplo de conexão local, sem credenciais reais de produção:
 
 ```bash
-export LUMORA_APP_ID="commerceops"
-export LUMORA_BASE_URL="https://sua-lumora"
-export LUMORA_SHARED_SECRET="segredo-compartilhado"
+export ConnectionStrings__CommerceOps="Host=localhost;Port=5432;Database=commerceops;Username=commerceops;Password=commerceops"
 ```
 
-Também é possível usar as seções `Lumora` e `ClientApplicationSeed` em `appsettings`, mantendo segredos reais fora do repositório.
-
-## Build E Testes
+Exemplo da integração de referência:
 
 ```bash
-dotnet build CommerceOpsGuard.sln --no-restore /m:1
+export LUMORA_APP_ID="commerceops-local"
+export LUMORA_BASE_URL="http://localhost:8000"
+export LUMORA_SHARED_SECRET="<segredo-local-compartilhado>"
+```
+
+## Testes
+
+Após compilar a solution:
+
+```bash
 dotnet test CommerceOpsGuard.sln --no-build --no-restore /m:1 -p:BuildInParallel=false
 ```
 
-Testes cobrem:
+A suíte inclui testes unitários e de integração para regras e classificação de risco, guardrails, HMAC, autorização e comandos do bot, cliente HTTP, persistência, casos, triagem e fluxo de `ActionRequest`.
 
-- validação HMAC;
-- autorização de admin Telegram;
-- roteamento de comandos do bot;
-- cliente Lumora;
-- endpoints de health, eventos, casos e diagnóstico;
-- criação, listagem, aprovação e cancelamento de ActionRequests;
-- persistência com EF Core em testes de integração.
+## Roadmap
 
-## Estado Atual
+- [ ] suporte a múltiplos e-commerces/clientes;
+- [ ] painel web administrativo;
+- [ ] mais conectores além da Lumora;
+- [ ] templates de ações operacionais;
+- [ ] histórico de auditoria mais detalhado;
+- [ ] alertas proativos;
+- [ ] documentação pública da especificação de integração;
+- [ ] empacotamento para deploy.
 
-Concluído:
+## Status atual
 
-- [x] solução .NET 8 organizada por API, Application, Domain, Infrastructure, Bot e Worker;
-- [x] Docker Compose com PostgreSQL e Redis;
-- [x] ingestão de eventos com HMAC;
-- [x] persistência de eventos e casos operacionais;
-- [x] regras iniciais para criação de casos;
-- [x] endpoints de casos;
-- [x] cliente Lumora com HMAC;
-- [x] endpoint interno de diagnóstico de pedido;
-- [x] bot Telegram consultivo;
-- [x] rascunho de mensagem ao cliente;
-- [x] ActionRequests com aprovação/cancelamento;
-- [x] testes unitários e de integração.
+O CommerceOps Guard é um projeto em desenvolvimento com uma base funcional validada localmente: arquitetura em camadas, API, worker, bot Telegram, persistência, integração HMAC com a Lumora, triagem, classificação determinística e opcional por IA, guardrails, fluxo de aprovação e testes automatizados.
 
-Próximas fases:
+Ainda não é uma solução pronta para produção. Entre os limites atuais estão o conector nomeado e implementado especificamente para a Lumora, a ausência de painel administrativo e o fato de ações aprovadas não executarem automaticamente alterações ou envios no sistema cliente.
 
-- [ ] Lumora expor endpoint seguro de envio real de e-mail;
-- [ ] CommerceOps executar ActionRequest aprovada chamando esse endpoint;
-- [ ] registrar auditoria de execução;
-- [ ] proteger contra reenvio duplicado;
-- [ ] ampliar tipos de ações operacionais;
-- [ ] evoluir Worker para processamento assíncrono de ações.
+## Stack
+
+C#, .NET 8, ASP.NET Core, Entity Framework Core, PostgreSQL, Docker, Telegram Bot API, HttpClientFactory, HMAC SHA-256, OpenAI API, Ollama, xUnit, Laravel e React.
 
 ## Contato
 
