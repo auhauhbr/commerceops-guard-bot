@@ -149,6 +149,8 @@ public sealed class LumoraOrderDiagnosticEndpointTests : IClassFixture<CommerceO
             Task.FromResult(_diagnosticResult);
 
         public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            int? lookbackMinutes = null,
+            int? limit = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

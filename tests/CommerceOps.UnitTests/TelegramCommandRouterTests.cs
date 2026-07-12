@@ -694,6 +694,8 @@ public sealed class TelegramCommandRouterTests
         }
 
         public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            int? lookbackMinutes = null,
+            int? limit = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -787,9 +789,13 @@ public sealed class TelegramCommandRouterTests
     {
         public IReadOnlyList<OrderTriageSnapshotDetails> Snapshots { get; init; } = [];
 
-        public Task RefreshAsync(Guid clientApplicationId, CancellationToken cancellationToken = default)
+        public Task<OrderTriageRefreshResult> RefreshAsync(
+            Guid clientApplicationId,
+            int? lookbackMinutes = null,
+            int? limit = null,
+            CancellationToken cancellationToken = default)
         {
-            return Task.CompletedTask;
+            return Task.FromResult(new OrderTriageRefreshResult(0, 0, 0));
         }
 
         public Task<IReadOnlyList<OrderTriageSnapshotDetails>> GetTopAsync(

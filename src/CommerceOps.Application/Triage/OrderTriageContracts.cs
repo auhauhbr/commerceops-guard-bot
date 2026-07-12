@@ -34,6 +34,15 @@ public sealed record OrderTriageSnapshotDetails(
     bool Notified,
     DateTimeOffset? LastNotifiedAt);
 
+public sealed record OrderTriageRefreshResult(
+    int CandidatesCount,
+    int UpsertedCount,
+    int SkippedCount,
+    string? ErrorCode = null)
+{
+    public bool IsSuccess => ErrorCode is null;
+}
+
 public interface IOrderRiskScorer
 {
     OrderRiskScore Score(OrderTriageCandidate candidate, DateTimeOffset now);
@@ -41,7 +50,11 @@ public interface IOrderRiskScorer
 
 public interface IOrderTriageService
 {
-    Task RefreshAsync(Guid clientApplicationId, CancellationToken cancellationToken = default);
+    Task<OrderTriageRefreshResult> RefreshAsync(
+        Guid clientApplicationId,
+        int? lookbackMinutes = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<OrderTriageSnapshotDetails>> GetTopAsync(
         int limit,

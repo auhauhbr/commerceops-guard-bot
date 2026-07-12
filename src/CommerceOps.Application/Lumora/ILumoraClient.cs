@@ -9,6 +9,8 @@ public interface ILumoraClient
         CancellationToken cancellationToken = default);
 
     Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+        int? lookbackMinutes = null,
+        int? limit = null,
         CancellationToken cancellationToken = default);
 
     Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(

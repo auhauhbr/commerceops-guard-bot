@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CommerceOps.Api\CommerceOps.Api.csproj" />
     <ProjectReference Include="..\..\src\CommerceOps.Infrastructure\CommerceOps.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CommerceOps.Worker\CommerceOps.Worker.csproj" />
   </ItemGroup>
 
 </Project>

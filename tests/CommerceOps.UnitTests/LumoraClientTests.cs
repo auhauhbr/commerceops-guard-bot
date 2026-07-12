@@ -94,6 +94,23 @@ public sealed class LumoraClientTests
     }
 
     [Fact]
+    public async Task GetTriageCandidatesSendsLookbackAndLimit()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{ "items": [] }""")
+        });
+        var client = CreateClient(handler, logger: new CapturingLogger<LumoraClient>());
+
+        var result = await client.GetTriageCandidatesAsync(240, 100);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            "/commerceops/orders/triage-candidates?lookback_minutes=240&limit=100",
+            handler.LastRequest?.RequestUri?.PathAndQuery);
+    }
+
+    [Fact]
     public async Task NonSuccessStatusReturnsFriendlyErrorWithoutLoggingSecret()
     {
         var logger = new CapturingLogger<LumoraClient>();
