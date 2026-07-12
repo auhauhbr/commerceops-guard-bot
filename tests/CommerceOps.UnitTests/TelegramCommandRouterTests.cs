@@ -65,23 +65,46 @@ public sealed class TelegramCommandRouterTests
     }
 
     [Fact]
-    public async Task RouteAsyncSummarizesOpenCasesByRiskAndStatus()
+    public async Task RouteAsyncSummarizesHighAndMediumTriageSnapshots()
     {
-        var queryService = new FakeCaseQueryService
+        var triageService = new FakeOrderTriageService
         {
-            OpenCases =
+            Snapshots =
             [
-                new CaseSummary("CASE-00002", "Estoque negativo", "medium", "open"),
-                new CaseSummary("CASE-00001", "Pedido pago não confirmado", "medium", "open")
+                CreateTriageSnapshot("1", 80, "high", "order_paid_but_pending", DateTimeOffset.Parse("2026-07-07T11:55:00Z")),
+                CreateTriageSnapshot("2", 75, "HIGH", "negative_stock", DateTimeOffset.Parse("2026-07-07T11:54:00Z")),
+                CreateTriageSnapshot("3", 50, "medium", "order_total_mismatch", DateTimeOffset.Parse("2026-07-07T11:53:00Z")),
+                CreateTriageSnapshot("4", 40, "medium", "pending_order_without_approved_payment", DateTimeOffset.Parse("2026-07-07T11:52:00Z")),
+                CreateTriageSnapshot("5", 10, "low", "stale_order", DateTimeOffset.Parse("2026-07-07T11:51:00Z"))
             ]
         };
-        var router = CreateRouter(queryService);
+        var actionService = new FakeActionRequestService { PendingActionCount = 2 };
+        var router = CreateRouter(actionRequestService: actionService, orderTriageService: triageService);
 
         var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/resumo"), CancellationToken.None);
 
-        Assert.Contains("Casos abertos: 2", response);
-        Assert.Contains("medium: 2", response);
-        Assert.Contains("open: 2", response);
+        Assert.Contains("Resumo operacional — Lumora", response);
+        Assert.Contains("Pedidos em atenção: 4", response);
+        Assert.Contains("Alto risco: 2", response);
+        Assert.Contains("Médio risco: 2", response);
+        Assert.Contains("- Pagamento aprovado, pedido pendente: 1", response);
+        Assert.Contains("- Estoque negativo: 1", response);
+        Assert.Contains("- Total inconsistente: 1", response);
+        Assert.Contains("- Pedido pendente sem pagamento aprovado: 1", response);
+        Assert.Contains("Ações pendentes: 2", response);
+        Assert.Contains("Última atualização: há 5 min", response);
+        Assert.Contains("/tr - ver fila priorizada", response);
+    }
+
+    [Fact]
+    public async Task RouteAsyncReturnsEmptyOperationalSummary()
+    {
+        var router = CreateRouter(actionRequestService: new FakeActionRequestService { PendingActionCount = 1 });
+
+        var response = await router.RouteAsync(new TelegramCommandContext(1, 123, "/resumo"), CancellationToken.None);
+
+        Assert.Contains("Não há pedidos em atenção no snapshot atual.", response);
+        Assert.Contains("Ações pendentes: 1", response);
     }
 
     [Fact]
@@ -151,8 +174,8 @@ public sealed class TelegramCommandRouterTests
                     orderId: "327",
                     score: 82,
                     level: "high",
-                    summary: "pagamento aprovado, mas pedido ainda pendente",
-                    sourceUpdatedAt: DateTimeOffset.Parse("2026-07-07T11:48:00Z"))
+                    findingCode: "order_paid_but_pending",
+                    refreshedAt: DateTimeOffset.Parse("2026-07-07T11:48:00Z"))
             ]
         };
         var router = CreateRouter(orderTriageService: triageService);
@@ -620,8 +643,8 @@ public sealed class TelegramCommandRouterTests
         string orderId,
         int score,
         string level,
-        string? summary,
-        DateTimeOffset sourceUpdatedAt)
+        string? findingCode,
+        DateTimeOffset refreshedAt)
     {
         return new OrderTriageSnapshotDetails(
             Guid.NewGuid(),
@@ -630,13 +653,13 @@ public sealed class TelegramCommandRouterTests
             orderId,
             score,
             level,
-            "order_paid_but_pending",
-            summary,
+            findingCode,
+            null,
             "pending",
             "approved",
             899m,
-            sourceUpdatedAt,
-            DateTimeOffset.Parse("2026-07-07T12:00:00Z"),
+            refreshedAt,
+            refreshedAt,
             false,
             null);
     }
@@ -726,6 +749,8 @@ public sealed class TelegramCommandRouterTests
 
         public IReadOnlyList<ActionRequestDetails> PendingActions { get; init; } = [];
 
+        public int? PendingActionCount { get; init; }
+
         public ActionRequestDetails? GetByPublicIdResult { get; init; }
 
         public ActionRequestDetails? ApproveResult { get; init; }
@@ -755,6 +780,11 @@ public sealed class TelegramCommandRouterTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(PendingActions);
+        }
+
+        public Task<int> CountPendingAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(PendingActionCount ?? PendingActions.Count);
         }
 
         public Task<ActionRequestDetails?> GetByPublicIdAsync(
