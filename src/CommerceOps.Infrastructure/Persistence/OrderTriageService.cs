@@ -11,15 +11,21 @@ public sealed class OrderTriageService(
     IOrderRiskScorer riskScorer,
     TimeProvider timeProvider) : IOrderTriageService
 {
-    public async Task RefreshAsync(Guid clientApplicationId, CancellationToken cancellationToken = default)
+    public async Task<OrderTriageRefreshResult> RefreshAsync(
+        Guid clientApplicationId,
+        int? lookbackMinutes = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await lumoraClient.GetTriageCandidatesAsync(cancellationToken);
+        var result = await lumoraClient.GetTriageCandidatesAsync(lookbackMinutes, limit, cancellationToken);
         if (!result.IsSuccess || result.Data is null)
         {
-            return;
+            return new OrderTriageRefreshResult(0, 0, 0, result.Error?.Code ?? "unknown_error");
         }
 
         var now = timeProvider.GetUtcNow();
+        var upsertedCount = 0;
+        var skippedCount = 0;
         var existingSnapshots = await dbContext.OrderTriageSnapshots
             .Where(snapshot => snapshot.ClientApplicationId == clientApplicationId)
             .ToDictionaryAsync(snapshot => snapshot.OrderId, cancellationToken);
@@ -29,6 +35,7 @@ public sealed class OrderTriageService(
             if (string.IsNullOrWhiteSpace(lumoraCandidate.OrderId) ||
                 string.IsNullOrWhiteSpace(lumoraCandidate.OrderStatus))
             {
+                skippedCount++;
                 continue;
             }
 
@@ -58,9 +65,12 @@ public sealed class OrderTriageService(
             snapshot.TotalValue = candidate.TotalValue;
             snapshot.SourceUpdatedAt = candidate.UpdatedAt;
             snapshot.RefreshedAt = now;
+            upsertedCount++;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new OrderTriageRefreshResult(result.Data.Items.Count, upsertedCount, skippedCount);
     }
 
     public async Task<IReadOnlyList<OrderTriageSnapshotDetails>> GetTopAsync(

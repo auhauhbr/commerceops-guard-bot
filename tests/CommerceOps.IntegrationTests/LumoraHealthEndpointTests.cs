@@ -89,6 +89,8 @@ public sealed class LumoraHealthEndpointTests : IClassFixture<CommerceOpsApiFact
             throw new NotSupportedException();
 
         public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
+            int? lookbackMinutes = null,
+            int? limit = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

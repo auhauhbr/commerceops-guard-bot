@@ -49,8 +49,27 @@ public sealed class LumoraClient : ILumoraClient
     }
 
     public Task<LumoraClientResult<LumoraOrderTriageCandidatesResponse>> GetTriageCandidatesAsync(
-        CancellationToken cancellationToken = default) =>
-        GetAsync<LumoraOrderTriageCandidatesResponse>("/commerceops/orders/triage-candidates", cancellationToken);
+        int? lookbackMinutes = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<string>();
+        if (lookbackMinutes is > 0)
+        {
+            query.Add($"lookback_minutes={lookbackMinutes.Value}");
+        }
+
+        if (limit is > 0)
+        {
+            query.Add($"limit={limit.Value}");
+        }
+
+        var path = query.Count == 0
+            ? "/commerceops/orders/triage-candidates"
+            : $"/commerceops/orders/triage-candidates?{string.Join("&", query)}";
+
+        return GetAsync<LumoraOrderTriageCandidatesResponse>(path, cancellationToken);
+    }
 
     public Task<LumoraClientResult<LumoraPaymentInconsistenciesResponse>> GetPaymentInconsistenciesAsync(
         CancellationToken cancellationToken = default) =>
