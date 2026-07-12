@@ -51,7 +51,8 @@ public sealed record LumoraOrderTriageCandidate(
     [property: JsonPropertyName("has_negative_stock")] bool HasNegativeStock,
     [property: JsonPropertyName("total_value")] decimal? TotalValue,
     [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt,
-    [property: JsonPropertyName("findings")] IReadOnlyList<string>? Findings);
+    [property: JsonPropertyName("findings")] IReadOnlyList<string>? Findings,
+    [property: JsonPropertyName("item_count")] int? ItemCount = null);
 
 public sealed record LumoraDiagnosticFinding(
     [property: JsonPropertyName("type")] string Type,

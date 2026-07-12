@@ -2,48 +2,98 @@ namespace CommerceOps.Application.Triage;
 
 public sealed class OrderRiskScorer : IOrderRiskScorer
 {
-    private const int PaymentApprovedPendingScore = 40;
-    private const int NegativeStockScore = 30;
+    private const int PaymentApprovedPendingScore = 70;
+    private const int NegativeStockScore = 70;
+    private const int OrderTotalMismatchScore = 50;
+    private const int PendingWithoutApprovedPaymentScore = 40;
+    private const int PaymentMissingScore = 30;
     private const int HighValuePendingScore = 20;
     private const int MaxAgingScore = 30;
 
+    private static readonly IReadOnlyDictionary<string, int> FindingScores =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["order_paid_but_pending"] = PaymentApprovedPendingScore,
+            ["negative_stock"] = NegativeStockScore,
+            ["order_total_mismatch"] = OrderTotalMismatchScore,
+            ["pending_order_without_approved_payment"] = PendingWithoutApprovedPaymentScore,
+            ["payment_missing"] = PaymentMissingScore
+        };
+
+    private static readonly IReadOnlyDictionary<string, int> FindingPriorities =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["order_paid_but_pending"] = 500,
+            ["negative_stock"] = 490,
+            ["order_total_mismatch"] = 400,
+            ["pending_order_without_approved_payment"] = 300,
+            ["payment_missing"] = 290,
+            ["high_value_pending_order"] = 200,
+            ["stale_order"] = 100
+        };
+
     public OrderRiskScore Score(OrderTriageCandidate candidate, DateTimeOffset now)
     {
-        var score = 0;
-        string? primaryFinding = null;
+        var contributions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var finding in candidate.Findings ?? [])
+        {
+            if (FindingScores.TryGetValue(finding, out var findingScore))
+            {
+                contributions[finding] = findingScore;
+            }
+        }
 
         if (HasApprovedPaymentStuckInPendingOrder(candidate, now))
         {
-            score += PaymentApprovedPendingScore;
-            primaryFinding ??= "order_paid_but_pending";
+            contributions["order_paid_but_pending"] = PaymentApprovedPendingScore;
         }
 
         if (candidate.HasNegativeStock)
         {
-            score += NegativeStockScore;
-            primaryFinding ??= "negative_stock";
+            contributions["negative_stock"] = NegativeStockScore;
         }
 
         if (IsPendingStatus(candidate.OrderStatus) && candidate.TotalValue is >= 500m)
         {
-            score += HighValuePendingScore;
-            primaryFinding ??= "high_value_pending_order";
+            contributions["high_value_pending_order"] = HighValuePendingScore;
         }
 
         var agingScore = CalculateAgingScore(candidate.UpdatedAt, now);
-        score += agingScore;
         if (agingScore > 0)
         {
-            primaryFinding ??= "stale_order";
+            contributions["stale_order"] = agingScore;
         }
 
-        primaryFinding ??= candidate.Findings?.FirstOrDefault();
+        CollapseMissingPaymentFindings(contributions);
+
+        var score = Math.Clamp(contributions.Values.Sum(), 0, 100);
+        var primaryFinding = SelectPrimaryFinding(contributions, candidate.Findings);
 
         return new OrderRiskScore(
-            Math.Max(0, score),
+            score,
             GetRiskLevel(score),
             primaryFinding,
             FormatSummary(primaryFinding));
+    }
+
+    private static void CollapseMissingPaymentFindings(IDictionary<string, int> contributions)
+    {
+        if (contributions.ContainsKey("pending_order_without_approved_payment"))
+        {
+            contributions.Remove("payment_missing");
+        }
+    }
+
+    private static string? SelectPrimaryFinding(
+        IReadOnlyDictionary<string, int> contributions,
+        IReadOnlyList<string>? findings)
+    {
+        var primaryFinding = contributions.Keys
+            .OrderByDescending(code => FindingPriorities.GetValueOrDefault(code))
+            .FirstOrDefault();
+
+        return primaryFinding ?? findings?.FirstOrDefault();
     }
 
     private static bool HasApprovedPaymentStuckInPendingOrder(OrderTriageCandidate candidate, DateTimeOffset now)
@@ -120,6 +170,9 @@ public sealed class OrderRiskScorer : IOrderRiskScorer
         {
             "order_paid_but_pending" => "pagamento aprovado, mas pedido ainda pendente",
             "negative_stock" => "estoque negativo em item do pedido",
+            "order_total_mismatch" => "total do pedido divergente do valor esperado",
+            "pending_order_without_approved_payment" => "pedido pendente sem pagamento aprovado",
+            "payment_missing" => "pagamento não encontrado para o pedido",
             "high_value_pending_order" => "pedido de valor alto ainda pendente",
             "stale_order" => "pedido sem atualização recente",
             _ => findingCode?.Replace('_', ' ')

@@ -9,7 +9,8 @@ public sealed record OrderTriageCandidate(
     bool HasNegativeStock,
     decimal? TotalValue,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<string>? Findings);
+    IReadOnlyList<string>? Findings,
+    int? ItemCount = null);
 
 public sealed record OrderRiskScore(
     int Score,
@@ -46,6 +47,14 @@ public sealed record OrderTriageRefreshResult(
 public interface IOrderRiskScorer
 {
     OrderRiskScore Score(OrderTriageCandidate candidate, DateTimeOffset now);
+}
+
+public interface IOrderRiskClassifier
+{
+    Task<AiRiskAssessmentResult> ClassifyAsync(
+        OrderTriageCandidate candidate,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IOrderTriageService
