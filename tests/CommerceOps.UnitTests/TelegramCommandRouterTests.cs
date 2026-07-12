@@ -9,6 +9,17 @@ namespace CommerceOps.UnitTests;
 public sealed class TelegramCommandRouterTests
 {
     [Fact]
+    public void RouterHasNoDirectAiDependency()
+    {
+        var dependencies = typeof(TelegramCommandRouter).GetConstructors().Single().GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.DoesNotContain(typeof(IAiRiskAssessmentProvider), dependencies);
+        Assert.DoesNotContain(typeof(IOrderRiskClassifier), dependencies);
+    }
+
+    [Fact]
     public async Task RouteAsyncBlocksUnauthorizedUser()
     {
         var router = CreateRouter(isAuthorized: false);

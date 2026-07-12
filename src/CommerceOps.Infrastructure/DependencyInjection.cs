@@ -15,6 +15,20 @@ namespace CommerceOps.Infrastructure;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddOpenAiRiskAssessmentProvider(this IServiceCollection services)
+    {
+        services.AddHttpClient<OpenAiRiskAssessmentProvider>((serviceProvider, httpClient) =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<AiRiskOptions>>().Value;
+            httpClient.BaseAddress = new Uri("https://api.openai.com");
+            httpClient.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 30));
+        });
+        services.Replace(ServiceDescriptor.Scoped<IAiRiskAssessmentProvider>(serviceProvider =>
+            serviceProvider.GetRequiredService<OpenAiRiskAssessmentProvider>()));
+
+        return services;
+    }
+
     public static IServiceCollection AddCommerceOpsInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
