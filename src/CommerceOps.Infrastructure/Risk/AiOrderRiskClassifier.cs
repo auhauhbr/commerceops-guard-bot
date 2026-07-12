@@ -24,7 +24,7 @@ public sealed class AiOrderRiskClassifier(
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.Provider) ||
+        if (!_options.Enabled || !string.Equals(_options.Provider, AiRiskOptions.OpenAiProvider, StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(_options.Model) || string.IsNullOrWhiteSpace(_options.ApiKey))
         {
             return await fallback.ClassifyAsync(candidate, now, cancellationToken);
@@ -45,7 +45,7 @@ public sealed class AiOrderRiskClassifier(
             var result = JsonSerializer.Deserialize<AiRiskAssessmentResult>(json, JsonOptions);
             if (!guardrail.IsValid(request, result))
             {
-                logger.LogWarning("AI risk response failed guardrails for order {OrderId}; deterministic fallback selected.", candidate.OrderId);
+                logger.LogWarning("AI risk response failed guardrails; deterministic fallback selected.");
                 return (await fallback.ClassifyAsync(candidate, now, cancellationToken)) with { RiskSource = "fallback" };
             }
 
@@ -55,15 +55,15 @@ public sealed class AiOrderRiskClassifier(
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning("AI risk classification timed out for order {OrderId}; deterministic fallback selected.", candidate.OrderId);
+            logger.LogWarning("AI risk classification timed out; deterministic fallback selected.");
         }
         catch (JsonException)
         {
-            logger.LogWarning("AI risk response was not valid JSON for order {OrderId}; deterministic fallback selected.", candidate.OrderId);
+            logger.LogWarning("AI risk response was not valid JSON; deterministic fallback selected.");
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "AI risk classification failed for order {OrderId}; deterministic fallback selected.", candidate.OrderId);
+            logger.LogWarning(exception, "AI risk classification failed; deterministic fallback selected.");
         }
 
         return (await fallback.ClassifyAsync(candidate, now, cancellationToken)) with { RiskSource = "fallback" };

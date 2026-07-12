@@ -4,6 +4,7 @@ using CommerceOps.Infrastructure;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddCommerceOpsInfrastructure(builder.Configuration);
+builder.Services.AddOpenAiRiskAssessmentProvider();
 builder.Services.Configure<TriageRefreshOptions>(options =>
 {
     var section = builder.Configuration.GetSection(TriageRefreshOptions.SectionName);

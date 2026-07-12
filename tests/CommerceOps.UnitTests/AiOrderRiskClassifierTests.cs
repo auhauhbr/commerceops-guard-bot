@@ -67,6 +67,18 @@ public sealed class AiOrderRiskClassifierTests
     }
 
     [Fact]
+    public async Task MissingOpenAiApiKeyUsesDeterministicWithoutCallingProvider()
+    {
+        var provider = new FakeProvider(ValidJson());
+        var classifier = CreateClassifier(provider, apiKey: null);
+
+        var result = await classifier.ClassifyAsync(Candidate("missing-key", ["payment_missing"]), Now);
+
+        Assert.Equal("deterministic", result.RiskSource);
+        Assert.Equal(0, provider.Calls);
+    }
+
+    [Fact]
     public async Task UnknownPrimaryFindingUsesFallback()
     {
         var result = await CreateClassifier(new FakeProvider(ValidJson(finding: "delete_order")))
@@ -90,7 +102,8 @@ public sealed class AiOrderRiskClassifierTests
     private static AiOrderRiskClassifier CreateClassifier(
         IAiRiskAssessmentProvider provider,
         bool enabled = true,
-        int timeoutSeconds = 3) =>
+        int timeoutSeconds = 3,
+        string? apiKey = "test-only") =>
         new(
             provider,
             new DeterministicOrderRiskClassifier(new OrderRiskScorer()),
@@ -99,9 +112,9 @@ public sealed class AiOrderRiskClassifierTests
             {
                 Enabled = enabled,
                 TimeoutSeconds = timeoutSeconds,
-                Provider = "fake",
+                Provider = "openai",
                 Model = "fake-model",
-                ApiKey = "test-only"
+                ApiKey = apiKey
             }),
             NullLogger<AiOrderRiskClassifier>.Instance);
 
