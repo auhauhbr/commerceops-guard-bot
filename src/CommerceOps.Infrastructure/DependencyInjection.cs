@@ -4,6 +4,7 @@ using CommerceOps.Application.Lumora;
 using CommerceOps.Application.Triage;
 using CommerceOps.Infrastructure.Lumora;
 using CommerceOps.Infrastructure.Persistence;
+using CommerceOps.Infrastructure.Risk;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,19 @@ public static class DependencyInjection
             options.UseNpgsql(configuration.GetConnectionString("CommerceOps")));
         services.TryAddSingleton(TimeProvider.System);
 
+        services.AddSingleton<IOptions<AiRiskOptions>>(_ =>
+        {
+            var section = configuration.GetSection(AiRiskOptions.SectionName);
+            return Options.Create(new AiRiskOptions
+            {
+                Enabled = bool.TryParse(configuration["AI_RISK_ENABLED"] ?? section["Enabled"], out var enabled) && enabled,
+                TimeoutSeconds = int.TryParse(configuration["AI_RISK_TIMEOUT_SECONDS"] ?? section["TimeoutSeconds"], out var timeout) ? timeout : 3,
+                Provider = configuration["AI_RISK_PROVIDER"] ?? section["Provider"],
+                Model = configuration["AI_RISK_MODEL"] ?? section["Model"],
+                ApiKey = configuration["OPENAI_API_KEY"]
+            });
+        });
+
         services.AddSingleton<IOptions<LumoraOptions>>(_ =>
         {
             var section = configuration.GetSection(LumoraOptions.SectionName);
@@ -69,6 +83,10 @@ public static class DependencyInjection
 
         services.AddScoped<CaseRuleEvaluator>();
         services.AddScoped<IOrderRiskScorer, OrderRiskScorer>();
+        services.AddScoped<DeterministicOrderRiskClassifier>();
+        services.AddSingleton<AiRiskAssessmentGuardrail>();
+        services.TryAddScoped<IAiRiskAssessmentProvider, UnconfiguredAiRiskAssessmentProvider>();
+        services.AddScoped<IOrderRiskClassifier, AiOrderRiskClassifier>();
         services.AddScoped<ICaseService, CaseService>();
         services.AddScoped<IOperationalCaseQueryService, OperationalCaseQueryService>();
         services.AddScoped<IActionRequestService, ActionRequestService>();

@@ -7,32 +7,78 @@ public sealed class OrderRiskScorerTests
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-07-07T12:00:00Z");
 
     [Fact]
-    public void ScoreReturnsMediumForApprovedPaymentStuckInPendingOrder()
+    public void ScoreReturnsHighForOrderPaidButPendingFinding()
     {
         var scorer = new OrderRiskScorer();
         var candidate = CreateCandidate(
             orderStatus: "pending",
-            paymentStatus: "approved",
-            paymentApprovedAt: Now.AddMinutes(-12));
+            findings: ["order_paid_but_pending"]);
+
+        var score = scorer.Score(candidate, Now);
+
+        Assert.True(score.Score >= 70);
+        Assert.Equal("high", score.Level);
+        Assert.Equal("order_paid_but_pending", score.PrimaryFindingCode);
+    }
+
+    [Fact]
+    public void ScoreReturnsHighForNegativeStockFinding()
+    {
+        var scorer = new OrderRiskScorer();
+        var candidate = CreateCandidate(findings: ["negative_stock"]);
+
+        var score = scorer.Score(candidate, Now);
+
+        Assert.True(score.Score >= 70);
+        Assert.Equal("high", score.Level);
+        Assert.Equal("negative_stock", score.PrimaryFindingCode);
+    }
+
+    [Fact]
+    public void ScoreReturnsMediumForOrderTotalMismatchFinding()
+    {
+        var scorer = new OrderRiskScorer();
+        var candidate = CreateCandidate(findings: ["order_total_mismatch"]);
+
+        var score = scorer.Score(candidate, Now);
+
+        Assert.True(score.Score >= 50);
+        Assert.Equal("medium", score.Level);
+        Assert.Equal("order_total_mismatch", score.PrimaryFindingCode);
+    }
+
+    [Fact]
+    public void ScoreDoesNotDoubleCountRelatedMissingPaymentFindings()
+    {
+        var scorer = new OrderRiskScorer();
+        var candidate = CreateCandidate(
+            findings: ["payment_missing", "pending_order_without_approved_payment"]);
 
         var score = scorer.Score(candidate, Now);
 
         Assert.Equal(40, score.Score);
         Assert.Equal("medium", score.Level);
-        Assert.Equal("order_paid_but_pending", score.PrimaryFindingCode);
+        Assert.Equal("pending_order_without_approved_payment", score.PrimaryFindingCode);
     }
 
     [Fact]
-    public void ScoreAddsNegativeStockPoints()
+    public void ScoreCapsMultipleFindingsAtOneHundredAndPrioritizesMostSevere()
     {
         var scorer = new OrderRiskScorer();
-        var candidate = CreateCandidate(hasNegativeStock: true);
+        var candidate = CreateCandidate(
+            findings:
+            [
+                "payment_missing",
+                "order_total_mismatch",
+                "negative_stock",
+                "order_paid_but_pending"
+            ]);
 
         var score = scorer.Score(candidate, Now);
 
-        Assert.Equal(30, score.Score);
-        Assert.Equal("medium", score.Level);
-        Assert.Equal("negative_stock", score.PrimaryFindingCode);
+        Assert.Equal(100, score.Score);
+        Assert.Equal("high", score.Level);
+        Assert.Equal("order_paid_but_pending", score.PrimaryFindingCode);
     }
 
     [Fact]

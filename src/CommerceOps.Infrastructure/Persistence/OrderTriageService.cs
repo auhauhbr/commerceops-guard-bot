@@ -8,7 +8,7 @@ namespace CommerceOps.Infrastructure.Persistence;
 public sealed class OrderTriageService(
     CommerceOpsDbContext dbContext,
     ILumoraClient lumoraClient,
-    IOrderRiskScorer riskScorer,
+    IOrderRiskClassifier riskClassifier,
     TimeProvider timeProvider) : IOrderTriageService
 {
     public async Task<OrderTriageRefreshResult> RefreshAsync(
@@ -40,7 +40,7 @@ public sealed class OrderTriageService(
             }
 
             var candidate = ToTriageCandidate(lumoraCandidate);
-            var risk = riskScorer.Score(candidate, now);
+            var risk = await riskClassifier.ClassifyAsync(candidate, now, cancellationToken);
 
             if (!existingSnapshots.TryGetValue(candidate.OrderId, out var snapshot))
             {
@@ -49,15 +49,15 @@ public sealed class OrderTriageService(
                     Id = Guid.NewGuid(),
                     ClientApplicationId = clientApplicationId,
                     OrderId = candidate.OrderId,
-                    RiskLevel = risk.Level,
+                    RiskLevel = risk.RiskLevel,
                     OrderStatus = candidate.OrderStatus
                 };
                 dbContext.OrderTriageSnapshots.Add(snapshot);
             }
 
             snapshot.OrderNumber = candidate.OrderNumber;
-            snapshot.RiskScore = risk.Score;
-            snapshot.RiskLevel = risk.Level;
+            snapshot.RiskScore = risk.RiskScore;
+            snapshot.RiskLevel = risk.RiskLevel;
             snapshot.LastFindingCode = risk.PrimaryFindingCode;
             snapshot.Summary = risk.Summary;
             snapshot.OrderStatus = candidate.OrderStatus;
@@ -118,6 +118,7 @@ public sealed class OrderTriageService(
             candidate.HasNegativeStock,
             candidate.TotalValue,
             candidate.UpdatedAt,
-            candidate.Findings);
+            candidate.Findings,
+            candidate.ItemCount);
     }
 }

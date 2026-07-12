@@ -91,6 +91,7 @@ public sealed class LumoraClientTests
         Assert.Single(result.Data!.Items);
         Assert.Equal("327", result.Data.Items[0].OrderId);
         Assert.True(result.Data.Items[0].HasNegativeStock);
+        Assert.Equal(["order_paid_but_pending"], result.Data.Items[0].Findings);
     }
 
     [Fact]
